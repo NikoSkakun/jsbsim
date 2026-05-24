@@ -155,7 +155,7 @@ QUOTE_STYLE = ParagraphStyle(
 )
 CODE_STYLE = ParagraphStyle(
     "Code", parent=styles["Code"],
-    fontName="Courier", fontSize=8.2, leading=10.5,
+    fontName="DejaVu-Mono", fontSize=8.0, leading=10.5,
     leftIndent=6, rightIndent=6,
     backColor=colors.HexColor("#f5f7fa"),
     borderColor=colors.HexColor("#cdd5e0"),
@@ -2323,6 +2323,42 @@ def build_story():
     add_chapter_troubleshooting(story)
     add_chapter_python_api(story)
     add_chapter_extended_properties(story)
+    # ------------------------------------------------------------------
+    # PART II — Extended theory: from first principles to the cutting edge.
+    # Each chapter brings a self-contained, citation-rich treatment of the
+    # mathematics, physics, aerodynamics, geodesy, propulsion, and JSBSim-
+    # specific machinery that the earlier chapters depend on.
+    # ------------------------------------------------------------------
+    add_part_separator(story, "Part II", "Extended Theory and Background")
+    add_ext_math_fundamentals(story)
+    add_ext_quaternions_deep(story)
+    add_ext_numerical_integration(story)
+    add_ext_newton_euler(story)
+    add_ext_fluid_mechanics(story)
+    add_ext_lift_theory(story)
+    add_ext_drag_breakdown(story)
+    add_ext_stability_control(story)
+    add_ext_eigenmodes(story)
+    add_ext_airfoil_aerodynamics(story)
+    add_ext_cfd_methods(story)
+    add_ext_forced_oscillation(story)
+    add_ext_geodesy_wgs84(story)
+    add_ext_coord_transforms(story)
+    add_ext_earth_gravity(story)
+    add_ext_magnetic_navigation(story)
+    add_ext_time_systems(story)
+    add_ext_atmosphere_deep(story)
+    add_ext_wind_turbulence(story)
+    add_ext_propulsion_theory(story)
+    add_ext_propeller_rotor(story)
+    add_ext_signal_processing(story)
+    add_ext_lcp_friction(story)
+    add_ext_trim_algorithm(story)
+    add_ext_nesc_check_cases(story)
+    add_ext_property_tree_complete(story)
+    add_ext_function_language_complete(story)
+    add_ext_verification_validation(story)
+    add_ext_further_reading(story)
     add_chapter_glossary(story)
 
     return story
@@ -4055,6 +4091,2182 @@ def add_chapter_glossary(story):
     story.append(p(
         "<i>End of the Ultimate JSBSim Reference.</i> Bug reports and "
         "improvements welcome at https://github.com/JSBSim-Team/jsbsim."))
+
+
+# ============================================================================
+# PART II — Extended theory chapters
+# ============================================================================
+
+
+def add_part_separator(story, label, title):
+    """A title page introducing a part of the book."""
+    story.append(PageBreak())
+    story.append(Spacer(1, 60 * mm))
+    story.append(Paragraph(label, ParagraphStyle(
+        "PartLabel", fontName="Helvetica-Bold", fontSize=18,
+        textColor=colors.HexColor("#1d5d9b"), alignment=TA_CENTER,
+        spaceAfter=12)))
+    story.append(Paragraph(title, ParagraphStyle(
+        "PartTitle", fontName="Helvetica-Bold", fontSize=28,
+        textColor=colors.HexColor("#0d3b66"), alignment=TA_CENTER,
+        leading=34)))
+    story.append(Spacer(1, 12 * mm))
+    story.append(Paragraph(
+        "The remainder of this manual moves from the practical "
+        "&quot;how-to&quot; of Part I into a deeper, citation-driven treatment "
+        "of the mathematics, physics, aerodynamics, geodesy, propulsion "
+        "and verification machinery JSBSim implements. Read it linearly to "
+        "build a complete mental model, or use it as a reference once you "
+        "hit a topic in Part I that you want to understand in depth.",
+        ParagraphStyle("PartIntro", parent=BODY_STYLE,
+                       alignment=TA_CENTER, fontSize=11, leading=15,
+                       leftIndent=24 * mm, rightIndent=24 * mm)))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_math_fundamentals(story):
+    story.append(PageBreak())
+    heading("Mathematics for Flight Dynamics", 0, story)
+    story.append(p(
+        "Every line of JSBSim is at root a manipulation of three-vectors, "
+        "rotation matrices, quaternions, and the tensor that ties them all "
+        "together — the inertia tensor. This chapter is the compact "
+        "reference for those objects. We assume calculus and basic linear "
+        "algebra; everything beyond is built up from scratch."))
+
+    heading("Vectors in three dimensions", 1, story)
+    story.append(p(
+        "A 3-vector is an ordered triple <b>v</b> = (v<sub>x</sub>, "
+        "v<sub>y</sub>, v<sub>z</sub>). Two operations are central:"))
+    math("Dot product: &nbsp; <b>a</b>·<b>b</b> = a<sub>x</sub>b<sub>x</sub>"
+         " + a<sub>y</sub>b<sub>y</sub> + a<sub>z</sub>b<sub>z</sub> = "
+         "|<b>a</b>||<b>b</b>| cos θ")
+    math("Cross product: &nbsp; (<b>a</b>×<b>b</b>)<sub>i</sub> = "
+         "ε<sub>ijk</sub> a<sub>j</sub> b<sub>k</sub>; &nbsp;"
+         "|<b>a</b>×<b>b</b>| = |<b>a</b>||<b>b</b>| sin θ")
+    story.append(p(
+        "The dot product is a scalar; the cross product is a vector "
+        "perpendicular to both inputs. Both are written in JSBSim source "
+        "as <font face='Courier'>FGColumnVector3</font> overloads."))
+    story.append(p(
+        "<b>Triple product.</b> The scalar triple product "
+        "<b>a</b> · (<b>b</b> × <b>c</b>) equals the signed volume of the "
+        "parallelepiped spanned by the three vectors. The vector triple "
+        "product satisfies "
+        "<b>a</b> × (<b>b</b> × <b>c</b>) = (<b>a</b>·<b>c</b>)<b>b</b> − "
+        "(<b>a</b>·<b>b</b>)<b>c</b> — the 'BAC-CAB' identity used in "
+        "rigid-body kinematics."))
+    story.append(p(
+        "<b>Projection.</b> The component of <b>a</b> along the unit "
+        "vector <b><font name='DejaVu'>n̂</font></b> is <b>a</b>·<b><font name='DejaVu'>n̂</font></b>; the vector projection is "
+        "(<b>a</b>·<b><font name='DejaVu'>n̂</font></b>)<b><font name='DejaVu'>n̂</font></b>. This is used to extract drag "
+        "components along the relative-wind direction, normal forces "
+        "along the ellipsoid normal, etc."))
+
+    heading("Rotation matrices in SO(3)", 1, story)
+    story.append(p(
+        "A rotation matrix <b>R</b> ∈ SO(3) is a 3×3 real matrix with "
+        "<b>R</b><sup>T</sup><b>R</b> = <b>I</b> (orthogonal) and "
+        "det(<b>R</b>) = +1 (proper, no reflection). Two consequences:"))
+    for b in [
+        "Inversion is trivial: <b>R</b><sup>−1</sup> = <b>R</b><sup>T</sup>. "
+        "JSBSim never computes a numerical inverse of a rotation matrix.",
+        "Composition is matrix multiplication: a rotation by <b>R<sub>1</sub></b> "
+        "followed by <b>R<sub>2</sub></b> is <b>R<sub>2</sub></b><b>R<sub>1</sub></b>. "
+        "Composition is non-commutative.",
+    ]:
+        story.append(bullet(b))
+    story.append(p(
+        "The three elementary rotations about the body axes are the "
+        "building blocks of every aerospace Euler-angle convention:"))
+    code(
+        "         | 1   0     0   |          |  cθ   0   sθ |          | cψ -sψ  0 |\n"
+        "R_x(φ) = | 0  cφ    sφ   |  R_y(θ)= |   0   1    0 |  R_z(ψ)= | sψ  cψ  0 |\n"
+        "         | 0 -sφ    cφ   |          | -sθ   0   cθ |          |  0   0  1 |")
+    story.append(p(
+        "Note the sign convention: these matrices rotate <i>vectors</i> in "
+        "the active sense (or equivalently transform <i>frames</i> in the "
+        "passive sense — JSBSim uses the passive convention)."))
+
+    heading("The 3-2-1 aerospace Euler sequence", 1, story)
+    story.append(p(
+        "Aircraft attitude is conventionally given by yaw ψ, then pitch θ, "
+        "then roll φ, applied as intrinsic rotations about Z, then Y', then "
+        "X''. The combined matrix transforming a vector from the local "
+        "NED frame to the body frame is"))
+    math("R<sup>b</sup><sub>n</sub> = R<sub>x</sub>(φ) R<sub>y</sub>(θ) "
+         "R<sub>z</sub>(ψ)")
+    story.append(p(
+        "Multiplied out element by element this gives the classical 9-entry "
+        "direction cosine matrix found in every aerospace textbook (Stevens "
+        "&amp; Lewis Eq. 1.4-7). The 3-2-1 sequence has a singularity at "
+        "θ = ±90° where ψ and φ are no longer separately determined — "
+        "the well-known &quot;gimbal lock.&quot;"))
+
+    heading("The inertia tensor", 1, story)
+    story.append(p(
+        "For a rigid body with continuous mass distribution ρ(<b>r</b>), "
+        "the inertia tensor about a point is"))
+    math("<b>I</b> = ∫∫∫ ρ(<b>r</b>) (|<b>r</b>|²<b>1</b> − "
+         "<b>r</b>⊗<b>r</b>) dV")
+    story.append(p(
+        "where <b>1</b> is the 3×3 identity and ⊗ is the outer product. "
+        "Element-wise, the diagonal terms (moments of inertia)"))
+    math("I<sub>xx</sub> = ∫(y²+z²) dm; &nbsp; I<sub>yy</sub> = ∫(x²+z²) dm;"
+         " &nbsp; I<sub>zz</sub> = ∫(x²+y²) dm")
+    story.append(p(
+        "and the off-diagonal terms (products of inertia)"))
+    math("I<sub>xy</sub> = ∫xy dm; &nbsp; I<sub>xz</sub> = ∫xz dm; &nbsp; "
+         "I<sub>yz</sub> = ∫yz dm")
+    story.append(p(
+        "<b>Parallel axis theorem.</b> If <b>I</b><sub>cg</sub> is the "
+        "inertia about the centre of mass, the inertia about a point "
+        "displaced by <b>d</b> from the CG is"))
+    math("<b>I</b><sub>P</sub> = <b>I</b><sub>cg</sub> + m (|<b>d</b>|² "
+         "<b>1</b> − <b>d</b>⊗<b>d</b>)")
+    story.append(p(
+        "<font face='Courier'>FGMassBalance</font> applies this every tick "
+        "to add each pointmass's inertia contribution to the empty-weight "
+        "tensor."))
+    story.append(p(
+        "<b>Principal axes.</b> Diagonalising <b>I</b> (which is real "
+        "symmetric, hence orthogonally diagonalisable) gives three "
+        "<i>principal moments of inertia</i> along three <i>principal "
+        "axes</i>. For aircraft with x-z plane symmetry, "
+        "I<sub>xy</sub> = I<sub>yz</sub> = 0 by construction; I<sub>xz</sub> "
+        "is non-zero whenever the upper and lower halves of the fuselage "
+        "are mass-imbalanced (always)."))
+
+    heading("Tensor transformation under rotation", 1, story)
+    story.append(p(
+        "Vectors transform as v' = <b>R</b>v. A second-order tensor like the "
+        "inertia matrix transforms as"))
+    math("<b>I</b>' = <b>R</b> <b>I</b> <b>R</b><sup>T</sup>")
+    story.append(p(
+        "This is how the structural-frame inertia listed in the XML is "
+        "rotated to the body frame at load time, and how the body-frame "
+        "inertia is rotated to the stability or wind frames when needed "
+        "for stability-derivative analysis."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_quaternions_deep(story):
+    story.append(PageBreak())
+    heading("Quaternions — Theory and Practice", 0, story)
+    story.append(p(
+        "Quaternions are the workhorse rotation representation inside "
+        "<font face='Courier'>FGPropagate</font>. Reading JSBSim's "
+        "integration loop is far easier if you have a working grip on "
+        "the algebra."))
+
+    heading("Definition: H, the quaternion algebra", 1, story)
+    story.append(p(
+        "Hamilton's quaternions are the four-dimensional real algebra "
+        "spanned by 1, i, j, k with multiplication rules"))
+    math("i² = j² = k² = ijk = −1, &nbsp; ij = k, &nbsp; jk = i, &nbsp; "
+         "ki = j")
+    story.append(p(
+        "A quaternion is q = q<sub>0</sub> + q<sub>1</sub>i + q<sub>2</sub>j"
+        " + q<sub>3</sub>k, often written (q<sub>0</sub>, <b>q</b>) with "
+        "q<sub>0</sub> the scalar part and <b>q</b> = "
+        "(q<sub>1</sub>,q<sub>2</sub>,q<sub>3</sub>) the vector part."))
+
+    heading("The Hamilton product", 1, story)
+    math("p · q = (p<sub>0</sub>q<sub>0</sub> − <b>p</b>·<b>q</b>, &nbsp; "
+         "p<sub>0</sub><b>q</b> + q<sub>0</sub><b>p</b> + <b>p</b>×<b>q</b>)")
+    story.append(p(
+        "This non-commutative product is the heart of quaternion "
+        "arithmetic. It is implemented in "
+        "<font face='Courier'>FGQuaternion::operator*</font>. "
+        "<b>Warning:</b> aerospace software is split between Hamilton "
+        "convention (used by JSBSim, ROS, MATLAB Aerospace Toolbox) and "
+        "JPL convention (used by JPL/NASA Goddard's spacecraft software, "
+        "negating the sign of the cross-product term). Mixing them "
+        "swaps left- and right-handed rotations — a frequent bug source."))
+
+    heading("Unit quaternions and rotations", 1, story)
+    story.append(p(
+        "A unit quaternion (|q| = 1) parameterises a rotation. The "
+        "axis-angle correspondence is"))
+    math("q = (cos(θ/2), <b><font name='DejaVu'>n̂</font></b> sin(θ/2))")
+    story.append(p(
+        "for a rotation by angle θ about unit axis <b><font name='DejaVu'>n̂</font></b>. The vector "
+        "<b>v</b> rotates as the imaginary part of"))
+    math("v' = q v q*")
+    story.append(p(
+        "where v is the pure quaternion (0, <b>v</b>) and q* = "
+        "(q<sub>0</sub>, −<b>q</b>) is the conjugate. Equivalently, the "
+        "DCM corresponding to q is"))
+    code(
+        "       | q0²+q1²-q2²-q3²    2(q1q2 - q0q3)     2(q1q3 + q0q2) |\n"
+        "R(q) = | 2(q1q2 + q0q3)    q0²-q1²+q2²-q3²    2(q2q3 - q0q1) |\n"
+        "       | 2(q1q3 - q0q2)    2(q2q3 + q0q1)    q0²-q1²-q2²+q3² |")
+    story.append(p(
+        "Internally <font face='Courier'>FGQuaternion::"
+        "GetTransformationMatrix()</font> caches this 9-entry DCM so that "
+        "subsequent frame transforms reduce to a matrix-vector multiply."))
+
+    heading("Kinematic equation: <font name='DejaVu'>q̇</font> = ½ q ⊗ ω", 1, story)
+    story.append(p(
+        "If the body's angular velocity (in body frame) is ω, the "
+        "kinematic ODE for the rotation from inertial to body is"))
+    math("<font name='DejaVu'>q̇</font> = ½ q ⊗ (0, ω<sub>body</sub>)")
+    story.append(p(
+        "Geometrically: at every instant the quaternion advances "
+        "perpendicular to itself in 4-D, so |q| is invariant under "
+        "<i>exact</i> integration. Numerical schemes lose this "
+        "invariance and need either periodic renormalisation or a "
+        "structure-preserving integrator."))
+    story.append(p(
+        "<b>The Buss integrators</b> implement structure-preserving "
+        "discrete maps. For constant ω over [t, t+Δt],"))
+    math("q(t+Δt) = q(t) · exp(½ Δt ω) = q(t) · "
+         "(cos(|ω|Δt/2), <b><font name='DejaVu'>ω̂</font></b> sin(|ω|Δt/2))")
+    story.append(p(
+        "is exact and preserves unit norm to floating-point precision. "
+        "Buss-2 augments this with a correction term from <font name='DejaVu'>ω̇</font>, giving "
+        "second-order accuracy for non-constant ω."))
+
+    heading("Quaternions vs. Euler angles vs. DCMs", 1, story)
+    table_data = [
+        ["Representation", "Parameters", "Singularity", "Cost", "When"],
+        ["Euler 3-2-1", "3 (φ, θ, ψ)",
+         "θ = ±90° (gimbal lock)",
+         "Cheap to display",
+         "Cockpit display, output"],
+        ["Quaternion",  "4 (q<sub>0</sub>..q<sub>3</sub>)",
+         "None",
+         "Compact, fast",
+         "Integration, storage"],
+        ["DCM",
+         "9 (orthogonality wastes 6)",
+         "None",
+         "Drift; need renorm",
+         "Frame transforms"],
+        ["Rotation vector",
+         "3 (θ <b><font name='DejaVu'>n̂</font></b>)",
+         "Singular at θ=2π",
+         "Minimal",
+         "Linearised perturbations"],
+    ]
+    t = Table(wrap_table(table_data),
+              colWidths=[3.4 * cm, 3.4 * cm, 3.6 * cm, 2.4 * cm, 3.4 * cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1d5d9b")),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.white, colors.HexColor("#f4f7fa")]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(t)
+    story.append(p(
+        "JSBSim's design carries the quaternion as the primary attitude "
+        "state (no singularity, four DOF), caches a DCM derived from it "
+        "(cheap repeated frame transforms), and offers Euler outputs only "
+        "at the property-tree boundary."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_numerical_integration(story):
+    story.append(PageBreak())
+    heading("Numerical Integration — Theory", 0, story)
+    story.append(p(
+        "The properties <font face='Courier'>simulation/integrator/rate/"
+        "rotational</font>, <font face='Courier'>position/rotational</font>, "
+        "<font face='Courier'>rate/translational</font> and "
+        "<font face='Courier'>position/translational</font> choose four "
+        "schemes independently. Knowing the underlying numerical theory is "
+        "the difference between a stable model at <i>dt</i> = 1/120 s and a "
+        "model that blows up when you change <i>dt</i>."))
+
+    heading("Single-step methods", 1, story)
+    story.append(p(
+        "For an initial-value problem ẏ = f(t, y), y(t<sub>0</sub>) = y<sub>0</sub>:"))
+    math("Forward Euler: &nbsp; y<sub>n+1</sub> = y<sub>n</sub> + h f(t<sub>n</sub>, y<sub>n</sub>)")
+    story.append(p(
+        "Local truncation error O(h²), global error O(h). Conditionally "
+        "stable: for the test equation ẏ = λy, |1 + hλ| &lt; 1 is required, "
+        "which for real negative λ means h &lt; 2/|λ|."))
+    math("Backward Euler: &nbsp; y<sub>n+1</sub> = y<sub>n</sub> + h f(t<sub>n+1</sub>, y<sub>n+1</sub>)")
+    story.append(p(
+        "Implicit, unconditionally A-stable. Requires a nonlinear solve "
+        "each step. Rarely used in real-time aircraft sim because of cost."))
+    math("Trapezoidal (Heun, AM2): y<sub>n+1</sub> = y<sub>n</sub> + (h/2)"
+         "[f(t<sub>n</sub>, y<sub>n</sub>) + f(t<sub>n+1</sub>, y<sub>n+1</sub>)]")
+    story.append(p(
+        "Implicit second-order; predictor-corrector form is the usual "
+        "explicit version. JSBSim's <font face='Courier'>eTrapezoidal</font> "
+        "uses the predictor-corrector with the prior derivative as predictor "
+        "— effectively trapezoidal on the previous derivative."))
+    math("RK4: &nbsp; k<sub>1</sub> = f(t<sub>n</sub>, y<sub>n</sub>), &nbsp; "
+         "k<sub>2</sub> = f(t<sub>n</sub>+h/2, y<sub>n</sub>+h k<sub>1</sub>/2), "
+         "...&nbsp; y<sub>n+1</sub> = y<sub>n</sub> + h(k<sub>1</sub>+2k<sub>2</sub>+2k<sub>3</sub>+k<sub>4</sub>)/6")
+    story.append(p(
+        "Classical Runge-Kutta 4 is the gold standard for simulator work "
+        "where 1-step methods are preferred. Fourth-order accurate but "
+        "four function evaluations per step — not what JSBSim uses by "
+        "default."))
+
+    heading("Multi-step methods: Adams-Bashforth", 1, story)
+    story.append(p(
+        "JSBSim implements explicit Adams-Bashforth up to order 5. They "
+        "use a single function evaluation per step but require startup "
+        "values (filled in by lower-order methods or repeated Eulers)."))
+    code(
+        "AB2:  y_{n+1} = y_n + h*(  3/2 f_n  -  1/2 f_{n-1} )\n"
+        "AB3:  y_{n+1} = y_n + h*( 23/12 f_n - 16/12 f_{n-1} + 5/12 f_{n-2} )\n"
+        "AB4:  y_{n+1} = y_n + h*( 55/24 f_n - 59/24 f_{n-1} + 37/24 f_{n-2}\n"
+        "                          - 9/24 f_{n-3} )\n"
+        "AB5:  y_{n+1} = y_n + h*( 1901/720 f_n - 2774/720 f_{n-1}\n"
+        "                          + 2616/720 f_{n-2} - 1274/720 f_{n-3}\n"
+        "                          + 251/720 f_{n-4} )")
+    story.append(p(
+        "JSBSim's defaults are AB2 for translational rate, AB3 for "
+        "translational position, and rectangular Euler for the quaternion "
+        "(later renormalised). For a smooth aircraft trajectory this gives "
+        "energy and angular-momentum conservation to within ~10⁻⁶ over "
+        "thousand-second runs at <i>dt</i> = 1/120 s."))
+
+    heading("Stability regions and step-size selection", 1, story)
+    story.append(p(
+        "Each integrator has a <i>region of absolute stability</i> in the "
+        "complex λh plane. For aircraft modes with eigenvalues λ on the "
+        "order of −2 to +0.05 rad/s (short period, phugoid, Dutch roll), "
+        "h &lt; 2/|λ<sub>max</sub>| ≈ 0.6 s suffices for stability. But "
+        "aerodynamic forcing introduces fast modes (the bandwidth of FCS "
+        "lag filters, gear-strut natural frequencies of 20-50 Hz), pushing "
+        "the requirement to h ≲ 1/120 s in practice."))
+    story.append(p(
+        "<b>Stiffness.</b> When the system has eigenvalues spanning many "
+        "decades (slow flight modes plus fast gear/actuator modes), "
+        "explicit methods become inefficient — they must use the smallest "
+        "time constant. Implicit methods would help; JSBSim instead "
+        "decouples the stiff parts (LCP for gear, prefilters for "
+        "actuators) so the explicit integration of the slow flight modes "
+        "stays stable."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_newton_euler(story):
+    story.append(PageBreak())
+    heading("Newton-Euler Rigid Body Dynamics", 0, story)
+    story.append(p(
+        "Aircraft EOMs are a special case of rigid-body mechanics. This "
+        "chapter derives them from scratch and shows how JSBSim implements "
+        "each term."))
+
+    heading("Inertial form (Newton's laws)", 1, story)
+    math("m <b>a</b><sub>i</sub> = <b>F</b>, &nbsp;&nbsp;&nbsp; "
+         "d<b>H</b>/dt = <b>M</b>")
+    story.append(p(
+        "Linear momentum p = m<b>v</b><sub>i</sub> obeys "
+        "ṗ = <b>F</b>. Angular momentum about the centre of mass is "
+        "<b>H</b> = <b>I</b><b>ω</b>; its inertial-frame time derivative "
+        "equals the applied moment."))
+
+    heading("Body-frame form via the transport theorem", 1, story)
+    story.append(p(
+        "If a vector <b>q</b> is expressed in a frame rotating with "
+        "angular velocity <b>ω</b>, the relation between its inertial "
+        "and frame-relative derivatives is"))
+    math("(d<b>q</b>/dt)<sub>inertial</sub> = "
+         "(d<b>q</b>/dt)<sub>body</sub> + <b>ω</b> × <b>q</b>")
+    story.append(p(
+        "Apply to v<sub>body</sub> and to <b>H</b>:"))
+    math("m(<b><font name='DejaVu'>v̇</font></b><sub>body</sub> + <b>ω</b> × <b>v</b><sub>body</sub>) = "
+         "<b>F</b><sub>body</sub>")
+    math("<b>I</b><b><font name='DejaVu'>ω̇</font></b> + <b>ω</b> × (<b>I</b><b>ω</b>) = <b>M</b><sub>body</sub>")
+    story.append(p(
+        "These are <font face='Courier'>FGAccelerations::CalculateUVWdot()"
+        "</font> and <font face='Courier'>CalculatePQRdot()</font> in 12 "
+        "lines of arithmetic each. The cross-coupling term "
+        "<b>ω</b> × (<b>I</b><b>ω</b>) is the source of gyroscopic effects, "
+        "including the celebrated tennis-racket theorem."))
+
+    heading("Including planet rotation", 1, story)
+    story.append(p(
+        "The body frame on a rotating Earth is not strictly inertial. "
+        "Writing the inertial acceleration in terms of body and "
+        "ECEF-tangent contributions and applying the transport theorem "
+        "twice yields"))
+    math("<b><font name='DejaVu'>v̇</font></b><sub>body</sub> + (<b>ω</b><sub>b/i</sub>) × <b>v</b><sub>body</sub>"
+         " = <b>F</b>/m &minus; T<sub>i→b</sub>(<b>Ω</b><sub>p</sub> × <b>r</b><sub>i</sub>)·…")
+    story.append(p(
+        "The full inertial form including Coriolis and centrifugal "
+        "terms is integrated in the inertial frame; "
+        "<font face='Courier'>FGPropagate</font> stores "
+        "<font face='Courier'>vInertialPosition</font> and "
+        "<font face='Courier'>vInertialVelocity</font> and transforms to "
+        "body for output."))
+
+    heading("Aircraft-specific simplifications", 1, story)
+    for b in [
+        "x-z plane symmetry: I<sub>xy</sub> = I<sub>yz</sub> = 0.",
+        "Body-fixed coordinate axes coincide with principal axes only "
+        "approximately; I<sub>xz</sub> ≠ 0 because the upper and lower "
+        "fuselage halves are mass-asymmetric.",
+        "Steady flight: <b><font name='DejaVu'>v̇</font></b><sub>body</sub> = 0, <b><font name='DejaVu'>ω̇</font></b> = 0; "
+        "F and M reduce to zero (the trim condition).",
+        "Linearisation around a trim point yields the longitudinal "
+        "(u, w, q, θ) and lateral-directional (v, p, r, φ, ψ) "
+        "decoupled state-space systems used for stability analysis.",
+    ]:
+        story.append(bullet(b))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_fluid_mechanics(story):
+    story.append(PageBreak())
+    heading("Fluid Mechanics Foundations", 0, story)
+    story.append(p(
+        "All aerodynamic coefficients that JSBSim consumes come from "
+        "physics ultimately rooted in the Navier-Stokes equations. This "
+        "chapter is the bridge from the continuum equations to the "
+        "engineering numbers."))
+
+    heading("Conservation laws", 1, story)
+    math("Continuity: &nbsp; ∂ρ/∂t + ∇·(ρ<b>V</b>) = 0")
+    math("Momentum: &nbsp; ρ(∂<b>V</b>/∂t + <b>V</b>·∇<b>V</b>) = "
+         "−∇p + ∇·τ + ρ<b>g</b>")
+    math("Energy: &nbsp; ρ(∂e/∂t + <b>V</b>·∇e) = "
+         "−p ∇·<b>V</b> + Φ + ∇·(k∇T) + Q̇")
+    story.append(p(
+        "with the Newtonian viscous stress "
+        "τ<sub>ij</sub> = μ(∂u<sub>i</sub>/∂x<sub>j</sub> + "
+        "∂u<sub>j</sub>/∂x<sub>i</sub>) − (2/3)μδ<sub>ij</sub>∇·<b>V</b>. "
+        "Closed by an equation of state p = ρRT (calorically perfect gas)."))
+
+    heading("Dimensionless numbers", 1, story)
+    table_data = [
+        ["Number", "Definition", "Physical meaning"],
+        ["Reynolds Re",  "ρVL/μ = VL/ν",
+         "Inertial / viscous; controls boundary layer"],
+        ["Mach M",
+         "V/a, &nbsp; a = √(γRT)",
+         "Compressibility; M&lt;0.3 incompressible"],
+        ["Knudsen Kn",
+         "λ/L",
+         "Continuum validity; Kn&lt;0.01 OK"],
+        ["Prandtl Pr",
+         "μc<sub>p</sub>/k",
+         "Momentum vs thermal boundary thickness"],
+        ["Strouhal St",
+         "fL/V",
+         "Unsteady-to-convective time-scale ratio"],
+        ["Froude Fr",
+         "V/√(gL)",
+         "Inertial / gravitational (free-surface)"],
+    ]
+    t = Table(wrap_table(table_data),
+              colWidths=[3.0 * cm, 4.0 * cm, 9.4 * cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1d5d9b")),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.white, colors.HexColor("#f4f7fa")]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(t)
+    story.append(p(
+        "Typical aerospace ranges: Re for a UAV at low altitude is "
+        "10⁵-10⁶, a GA aircraft 10⁶-10⁷, a transport 10⁷-10⁸. Mach "
+        "ranges from 0.05 (small UAV) to 2.5+ (fighter); transonic "
+        "(0.8-1.2) is the most numerically difficult."))
+
+    heading("Boundary layers", 1, story)
+    story.append(p(
+        "Prandtl (1904) observed that for high Re, viscosity matters only "
+        "in a thin layer of thickness δ next to the surface. The boundary "
+        "layer equations are a reduced form of NS:"))
+    math("∂u/∂x + ∂v/∂y = 0, &nbsp; "
+         "u ∂u/∂x + v ∂u/∂y = −(1/ρ)dp/dx + ν ∂²u/∂y², &nbsp; "
+         "∂p/∂y ≈ 0")
+    story.append(p(
+        "Pressure is impressed from the outer inviscid flow. The Blasius "
+        "solution for a flat plate at zero pressure gradient gives the "
+        "laminar growth law δ ≈ 5.0 x/√Re<sub>x</sub>, local skin "
+        "friction C<sub>f</sub> ≈ 0.664/√Re<sub>x</sub>."))
+    story.append(p(
+        "<b>Turbulent transition</b> on a smooth flat plate at zero "
+        "gradient occurs near Re<sub>x</sub> ≈ 5×10⁵ but is highly "
+        "sensitive to freestream turbulence, roughness, and pressure "
+        "gradient. UAV-scale airfoils at Re &lt; 5×10⁵ often have "
+        "laminar separation bubbles that dominate the polar."))
+    story.append(p(
+        "<b>Turbulent profile</b>: u<sup>+</sup> = (1/κ) ln y<sup>+</sup>"
+        " + B in the log layer, with κ ≈ 0.41 and B ≈ 5.0. RANS CFD "
+        "should resolve y<sup>+</sup> &lt; 1 at the first cell for "
+        "wall-resolved analysis."))
+
+    heading("Separation, stall, and post-stall", 1, story)
+    story.append(p(
+        "Flow separates when the wall shear vanishes under an adverse "
+        "pressure gradient. On an airfoil this occurs at the stall "
+        "angle α<sub>stall</sub>, beyond which lift falls and drag "
+        "rises. Three stall mechanisms (depending on airfoil thickness):"))
+    for b in [
+        "<b>Trailing-edge stall</b> (thick airfoils &gt;15% t/c): "
+        "separation creeps upstream from the trailing edge; gentle "
+        "lift break.",
+        "<b>Leading-edge stall</b> (medium 9-15% t/c): a short laminar "
+        "separation bubble bursts; sharp lift break.",
+        "<b>Thin-airfoil stall</b> (&lt;8% t/c): long bubble grows and "
+        "reattaches further aft; lift curve flattens before breaking.",
+    ]:
+        story.append(bullet(b))
+    story.append(p(
+        "JSBSim's <font face='Courier'>&lt;hysteresis_limits&gt;</font> "
+        "in <font face='Courier'>&lt;aerodynamics&gt;</font> implements "
+        "the post-stall reattachment hysteresis explicitly."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_lift_theory(story):
+    story.append(PageBreak())
+    heading("Lift Generation Theory", 0, story)
+
+    heading("Bernoulli is not the answer (and equal-transit-time is wrong)", 1, story)
+    story.append(p(
+        "Bernoulli's equation along a streamline of incompressible "
+        "inviscid steady flow is"))
+    math("p + ½ρV² + ρgz = const")
+    story.append(p(
+        "It is a <b>consequence</b> of momentum conservation, not a "
+        "cause of lift. The popular &quot;equal transit time&quot; "
+        "explanation — that air over the upper surface must traverse it "
+        "in the same time as air below — is empirically wrong; smoke-line "
+        "experiments show the upper-surface air arrives at the trailing "
+        "edge much earlier. The real cause of pressure asymmetry is "
+        "<i>circulation</i>, established by the Kutta condition."))
+
+    heading("Kutta-Joukowski: the right answer", 1, story)
+    math("L' = ρ<sub>∞</sub> V<sub>∞</sub> Γ")
+    story.append(p(
+        "For 2-D inviscid incompressible flow around any closed body, "
+        "lift per unit span equals density times freestream velocity "
+        "times circulation Γ = ∮<b>V</b>·d<b>s</b>. Drag in this "
+        "framework is zero (d'Alembert's paradox); viscosity reintroduces "
+        "drag and selects Γ uniquely via the Kutta condition (smooth flow "
+        "off the sharp trailing edge)."))
+
+    heading("Thin airfoil theory", 1, story)
+    story.append(p(
+        "For a thin airfoil, the lift-curve slope is the famous result"))
+    math("dC<sub>l</sub>/dα = 2π &nbsp;(per radian) &nbsp;≈ 0.110 /deg")
+    story.append(p(
+        "and the aerodynamic centre (point of zero pitching moment with α) "
+        "is at the quarter-chord. Camber shifts the zero-lift angle "
+        "α<sub>L=0</sub> but does not change the slope."))
+
+    heading("Finite wings: Prandtl's lifting line", 1, story)
+    story.append(p(
+        "A finite wing sheds trailing vorticity that induces a downwash, "
+        "tilting the local lift vector backwards (induced drag) and "
+        "reducing the effective angle of attack. Prandtl's lifting-line "
+        "theory replaces the wing by a bound vortex of strength Γ(y) "
+        "and a sheet of trailing vortices. The classical results:"))
+    math("C<sub>L</sub> = π · AR · A<sub>1</sub>, &nbsp; "
+         "C<sub>D,i</sub> = C<sub>L</sub>² / (π · AR · e)")
+    story.append(p(
+        "with span efficiency e ≤ 1 (e = 1 for elliptic loading, the "
+        "minimum-induced-drag distribution). Modern aircraft use winglets "
+        "and span loading optimisation to approach e ≈ 0.9-0.95."))
+    story.append(p(
+        "The finite-wing lift-curve slope:"))
+    math("dC<sub>L</sub>/dα = a<sub>0</sub> / (1 + a<sub>0</sub>/(π·AR·e))")
+    story.append(p(
+        "with a<sub>0</sub> ≈ 2π the 2-D section slope. For AR=8, "
+        "e=0.85 this gives dC<sub>L</sub>/dα ≈ 4.9/rad — about 20% "
+        "less than the 2π value an infinite wing would have."))
+
+    heading("Compressibility correction", 1, story)
+    math("C<sub>L,M</sub> = C<sub>L,inc</sub> / √(1 − M<sub>∞</sub>²) &nbsp;"
+         "(Prandtl-Glauert)")
+    story.append(p(
+        "Valid up to M ≈ 0.7. Beyond, shock formation and the local "
+        "transonic problem dominate; M<sub>crit</sub> (where local Mach "
+        "first reaches 1) typically occurs at M<sub>∞</sub> ≈ 0.7-0.8 "
+        "for transport airfoils."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_drag_breakdown(story):
+    story.append(PageBreak())
+    heading("Drag — A Complete Breakdown", 0, story)
+    math("C<sub>D</sub> = C<sub>D,f</sub> + C<sub>D,p</sub> + "
+         "C<sub>D,i</sub> + C<sub>D,int</sub> + C<sub>D,w</sub>")
+    story.append(p(
+        "Five additive sources at subsonic speeds. Each is captured by a "
+        "different XML function in JSBSim and each comes from a different "
+        "physical mechanism."))
+
+    heading("Skin friction (parasitic)", 1, story)
+    story.append(p(
+        "Turbulent skin friction on a flat plate (ESDU/Schlichting):"))
+    math("C<sub>f</sub> ≈ 0.455 / (log<sub>10</sub> Re<sub>L</sub>)<sup>2.58</sup>")
+    story.append(p(
+        "Modified by a form factor FF for curvature and an interference "
+        "factor Q for component junctions. Summed over wetted area, "
+        "D<sub>f</sub> = q ∑ C<sub>f,i</sub> FF<sub>i</sub> Q<sub>i</sub> "
+        "S<sub>wet,i</sub>."))
+
+    heading("Form (pressure) drag", 1, story)
+    story.append(p(
+        "Result of boundary-layer thickening and mild separation that "
+        "prevents the rear-body pressure from fully recovering its "
+        "stagnation value. Together with skin friction, this is the "
+        "<i>profile drag</i>. C<sub>D,f</sub> + C<sub>D,p</sub> are "
+        "combined into C<sub>D0</sub> for the polar."))
+
+    heading("Induced drag (lift-induced)", 1, story)
+    math("C<sub>D,i</sub> = C<sub>L</sub>² / (π · AR · e)")
+    story.append(p(
+        "Increases quadratically with C<sub>L</sub>. Span efficiency e "
+        "is between 0.7 and 0.95 for conventional wings; Oswald's "
+        "efficiency e<sub>0</sub> (which absorbs other C<sub>L</sub>² "
+        "effects) is used in the standard parabolic polar."))
+
+    heading("Interference drag", 1, story)
+    story.append(p(
+        "Junctions between components (wing-fuselage, pylon-wing) create "
+        "additional vortical and pressure-induced drag. ESDU and Hoerner "
+        "give empirical Q factors typically 1.0-1.3."))
+
+    heading("Wave drag", 1, story)
+    story.append(p(
+        "Above the critical Mach number M<sub>crit</sub>, the flow "
+        "accelerates locally to M=1 and a shock forms. Shock-boundary-"
+        "layer interaction yields wave drag that grows rapidly past "
+        "the drag-divergence Mach number M<sub>DD</sub>:"))
+    math("ΔC<sub>D,wave</sub> ≈ 20(M − M<sub>DD</sub>)<sup>4</sup>")
+    story.append(p(
+        "(Lock's fourth-power rule). Supersonic minimum wave drag is "
+        "achieved by Sears-Haack body of revolution (area rule, "
+        "Whitcomb)."))
+
+    heading("The parabolic drag polar and L/D max", 1, story)
+    math("C<sub>D</sub> = C<sub>D0</sub> + k C<sub>L</sub>², &nbsp; "
+         "k = 1/(π·AR·e)")
+    story.append(p(
+        "Maximum L/D occurs at C<sub>L</sub><sup>*</sup> = √(C<sub>D0</sub>/k)"
+        ", C<sub>D</sub><sup>*</sup> = 2 C<sub>D0</sub>:"))
+    math("(L/D)<sub>max</sub> = 1 / (2 √(k · C<sub>D0</sub>))")
+    story.append(p(
+        "Typical values: sailplane 40-60, jet transport 17-22, small UAV "
+        "8-14, Wright Flyer 1903 ≈ 8.3 (Anderson)."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_stability_control(story):
+    story.append(PageBreak())
+    heading("Stability &amp; Control — Complete Derivative Table", 0, story)
+
+    heading("Sign conventions and definitions", 1, story)
+    for b in [
+        "<b>Longitudinal static stability</b>: dC<sub>m</sub>/dα &lt; 0. "
+        "Equivalent to the CG forward of the neutral point.",
+        "<b>Directional ('weathercock') stability</b>: "
+        "dC<sub>n</sub>/dβ &gt; 0. Right sideslip yields nose-right "
+        "moment, restoring nose to wind.",
+        "<b>Lateral ('dihedral effect')</b>: "
+        "dC<sub>l</sub>/dβ &lt; 0. Right sideslip yields left rolling "
+        "moment, raising the windward wing.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Complete derivative table", 1, story)
+    table_data = [
+        ["Force/Moment", "α / <font name='DejaVu'>α̇</font>", "Rate", "Control"],
+        ["C<sub>L</sub>",   "C<sub>Lα</sub>, C<sub>L<font name='DejaVu'>α̇</font></sub>",
+         "C<sub>Lq</sub>",  "C<sub>Lδe</sub>, C<sub>Lδf</sub>"],
+        ["C<sub>D</sub>",   "C<sub>Dα</sub> (≈2k·C<sub>L</sub>·C<sub>Lα</sub>)",
+         "—", "C<sub>Dδe</sub>, C<sub>Dδf</sub>, C<sub>Dgear</sub>"],
+        ["C<sub>Y</sub>",   "C<sub>Yβ</sub>",
+         "C<sub>Yp</sub>, C<sub>Yr</sub>", "C<sub>Yδa</sub>, C<sub>Yδr</sub>"],
+        ["C<sub>l</sub> (roll)", "C<sub>lβ</sub>",
+         "C<sub>lp</sub>, C<sub>lr</sub>",
+         "C<sub>lδa</sub>, C<sub>lδr</sub>"],
+        ["C<sub>m</sub> (pitch)", "C<sub>mα</sub>, C<sub>m<font name='DejaVu'>α̇</font></sub>",
+         "C<sub>mq</sub>", "C<sub>mδe</sub>"],
+        ["C<sub>n</sub> (yaw)",  "C<sub>nβ</sub>",
+         "C<sub>np</sub>, C<sub>nr</sub>",
+         "C<sub>nδr</sub>, C<sub>nδa</sub>"],
+    ]
+    t = Table(wrap_table(table_data),
+              colWidths=[3.6 * cm, 4.0 * cm, 4.0 * cm, 4.8 * cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1d5d9b")),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.white, colors.HexColor("#f4f7fa")]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(t)
+    story.append(p(
+        "Damping derivatives are non-dimensionalised by b/(2V) (lateral) "
+        "or <font name='DejaVu'>c̄</font>/(2V) (longitudinal). The <font name='DejaVu'>α̇</font> derivative captures the downwash "
+        "lag between wing and tail. C<sub>nδa</sub> is the &quot;adverse "
+        "yaw&quot; — a positive aileron command produces yaw away from "
+        "the intended turn direction due to differential drag on the "
+        "deflected ailerons."))
+
+    heading("Neutral point and static margin", 1, story)
+    math("x<sub>NP</sub> = x<sub>AC,wing</sub> − (<font name='DejaVu'>q̄</font>·S<sub>h</sub>/<font name='DejaVu'>q̄</font>·S) · "
+         "(C<sub>Lα,h</sub>/C<sub>Lα</sub>) · l<sub>h</sub> / <font name='DejaVu'>c̄</font>")
+    story.append(p(
+        "Static margin: SM = (x<sub>NP</sub> − x<sub>CG</sub>) / <font name='DejaVu'>c̄</font>. "
+        "Civil transports SM ≈ 5-15%; fighters can run negative SM with "
+        "active control law (relaxed static stability)."))
+
+    heading("Maneuver point", 1, story)
+    story.append(p(
+        "The CG location at which dC<sub>m</sub>/dn<sub>z</sub> = 0 in a "
+        "steady pull-up. Aft of x<sub>NP</sub> by approximately "
+        "ρ S <font name='DejaVu'>c̄</font> C<sub>mq</sub> / (4 m), which moves x<sub>MP</sub> a few "
+        "percent of <font name='DejaVu'>c̄</font> behind x<sub>NP</sub> for typical transports."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_eigenmodes(story):
+    story.append(PageBreak())
+    heading("Aircraft Eigenmodes &amp; Linearisation", 0, story)
+
+    heading("Linearisation around trim", 1, story)
+    story.append(p(
+        "Perturbations Δu, Δw, Δq, Δθ about trim with U<sub>0</sub>, Θ<sub>0</sub>:"))
+    code(
+        "m Δu̇  = X_u Δu + X_w Δw - m g cosΘ_0 Δθ + ΔX_ctrl\n"
+        "m Δẇ  = Z_u Δu + Z_w Δw + (m U_0 + Z_q) Δq - m g sinΘ_0 Δθ + ΔZ_ctrl\n"
+        "I_y Δq̇ = M_u Δu + M_w Δw + M_w_dot Δẇ + M_q Δq + ΔM_ctrl\n"
+        "Δθ̇   = Δq")
+    story.append(p(
+        "The lateral-directional subsystem is [Δv, Δp, Δr, Δφ] driven "
+        "by Y<sub>v</sub>, Y<sub>p</sub>, Y<sub>r</sub>, L<sub>v</sub>, "
+        "L<sub>p</sub>, L<sub>r</sub>, N<sub>v</sub>, N<sub>p</sub>, "
+        "N<sub>r</sub>. To first order at symmetric trim the two "
+        "subsystems decouple."))
+
+    heading("State-space form", 1, story)
+    math("ẋ = Ax + Bu, &nbsp; y = Cx + Du")
+    story.append(p(
+        "Eigenvalues of A give the modes; eigenvectors give the modal "
+        "shape (which states participate in each mode). JSBSim's "
+        "<font face='Courier'>simulation/do_linearization</font> "
+        "extracts A, B, C, D at a trim point and writes them to log4cpp "
+        "output. The Python module exposes the same via "
+        "<font face='Courier'>jsbsim.utils.linearize</font>."))
+
+    heading("Longitudinal modes", 1, story)
+    story.append(p(
+        "<b>Short period</b> — fast pitch oscillation, primarily Δw and "
+        "Δq motion, lightly affected by Δu. Heavily damped (ζ ≈ 0.3-0.7), "
+        "ω<sub>n</sub> typically 1-5 rad/s for transports, 5-15 rad/s for "
+        "fighters."))
+    math("ω<sub>n,sp</sub>² ≈ Z<sub>α</sub>M<sub>q</sub>/V<sub>0</sub> − M<sub>α</sub>")
+    math("2ζ<sub>sp</sub>ω<sub>n,sp</sub> ≈ −(M<sub>q</sub> + M<sub><font name='DejaVu'>α̇</font></sub> + Z<sub>α</sub>/V<sub>0</sub>)")
+    story.append(p(
+        "<b>Phugoid</b> — slow exchange of kinetic and potential energy: "
+        "Δu and Δθ oscillate, Δw and Δq nearly zero. Lightly damped "
+        "(ζ ≈ 0.05) and slow."))
+    math("ω<sub>n,ph</sub> ≈ √2 · g / V<sub>0</sub> &nbsp;(Lanchester)")
+    math("ζ<sub>ph</sub> ≈ (1/√2) · (C<sub>D</sub>/C<sub>L</sub>)")
+    story.append(p(
+        "For an airliner at V<sub>0</sub> = 250 m/s, ω<sub>ph</sub> ≈ "
+        "0.055 rad/s — period ≈ 115 s. L/D = 17 gives ζ<sub>ph</sub> ≈ "
+        "0.041."))
+
+    heading("Lateral-directional modes", 1, story)
+    story.append(p(
+        "<b>Roll mode</b> — first-order, heavily damped exponential decay "
+        "of roll rate:"))
+    math("τ<sub>roll</sub> ≈ −I<sub>x</sub> / (<font name='DejaVu'>q̄</font>·S·b·C<sub>lp</sub>·b/(2V))")
+    story.append(p(
+        "Typical τ<sub>roll</sub> = 0.3-1.5 s. Felt by the pilot as the "
+        "&quot;rate response.&quot;"))
+    story.append(p(
+        "<b>Spiral mode</b> — first-order, very slow, often slightly "
+        "unstable. Eigenvalue near zero. Determined by the ratio of "
+        "dihedral effect to weathercock stability; "
+        "stability requires"))
+    math("C<sub>lβ</sub> · C<sub>nr</sub> &gt; C<sub>nβ</sub> · C<sub>lr</sub>")
+    story.append(p(
+        "<b>Dutch roll</b> — coupled yaw-roll oscillation; the aircraft "
+        "&quot;wags its tail&quot; while rocking its wings 90° out of "
+        "phase. Moderately damped (ζ ≈ 0.05-0.3), ω<sub>n</sub> ≈ 0.5-3 "
+        "rad/s for transports."))
+    math("ω<sub>n,DR</sub>² ≈ (<font name='DejaVu'>q̄</font>·S·b/I<sub>z</sub>) C<sub>nβ</sub>")
+    math("2 ζ<sub>DR</sub> ω<sub>n,DR</sub> ≈ −(<font name='DejaVu'>q̄</font>·S·b²/(2V·I<sub>z</sub>)) "
+         "C<sub>nr</sub>")
+    story.append(p(
+        "Dutch roll requires a yaw damper on transport aircraft; the "
+        "natural mode is typically too lightly damped for pilot comfort. "
+        "JSBSim's FCS handles this with a scheduled-gain yaw-damper."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_airfoil_aerodynamics(story):
+    story.append(PageBreak())
+    heading("Airfoil Aerodynamics", 0, story)
+
+    heading("The NACA airfoil family", 1, story)
+    story.append(p(
+        "<b>4-digit</b> (NACA 2412): max camber 2% chord, position of "
+        "max camber 0.4c, max thickness 12%."))
+    story.append(p(
+        "<b>5-digit</b> (NACA 23012): design C<sub>L</sub> = 0.3, position "
+        "of max camber 0.15c, max thickness 12%."))
+    story.append(p(
+        "<b>6-digit</b> (NACA 64<sub>2</sub>-415, &quot;laminar&quot;): "
+        "min-pressure position at 0.4c, half-width of low-drag CL bucket "
+        "= 0.2, design C<sub>L</sub> = 0.4, thickness 15%."))
+
+    heading("Typical performance", 1, story)
+    table_data = [
+        ["Airfoil",  "C<sub>L,max</sub>", "α<sub>stall</sub>",
+         "C<sub>d,min</sub>", "C<sub>m,ac</sub>"],
+        ["NACA 0012",   "1.45 (Re 3×10⁶)", "14°", "0.0060", "0.000"],
+        ["NACA 2412",   "1.55",             "15°", "0.0065", "−0.045"],
+        ["NACA 23012",  "1.70",             "18°", "0.0070", "−0.014"],
+        ["NACA 65-415", "1.50",             "16°", "0.0045", "−0.075"],
+        ["Selig S1223 (low-Re)", "2.20 (Re 2×10⁵)", "10°",
+            "0.0150", "−0.27"],
+    ]
+    t = Table(wrap_table(table_data),
+              colWidths=[4.0 * cm, 3.4 * cm, 2.3 * cm, 3.0 * cm, 3.7 * cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1d5d9b")),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.white, colors.HexColor("#f4f7fa")]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(t)
+
+    heading("Reynolds number effects on UAVs", 1, story)
+    story.append(p(
+        "Below Re ≈ 5×10⁵ laminar separation bubbles dominate, raising "
+        "C<sub>d,min</sub> and lowering C<sub>L,max</sub>. UAVs at Re ≈ "
+        "10⁵-3×10⁵ need specialised low-Re airfoils: Eppler 387, SD7037, "
+        "Selig S1223. JSBSim aero tables for UAVs should be specific to "
+        "the operational Re — do not extrapolate from wind-tunnel Re 10⁶ "
+        "to flight Re 10⁵."))
+
+    heading("Critical Mach number", 1, story)
+    math("C<sub>p</sub><sup>*</sup> = (2/γM<sub>∞</sub>²)[((1 + (γ−1)/2·M<sub>∞</sub>²)/(1 + (γ−1)/2))<sup>γ/(γ−1)</sup> − 1]")
+    story.append(p(
+        "M<sub>crit</sub> is solved simultaneously with the Prandtl-Glauert "
+        "Cp = Cp,min,inc / √(1 − M<sub>crit</sub>²). Drag divergence "
+        "M<sub>DD</sub> &gt; M<sub>crit</sub>, defined where dC<sub>D</sub>"
+        "/dM = 0.1."))
+    story.append(p(
+        "<b>Supercritical airfoils</b> (Whitcomb's NASA SC(2) series) "
+        "raise M<sub>DD</sub> by 0.05-0.10 at the same thickness, or "
+        "allow 30-60% greater thickness at the same M<sub>DD</sub> — "
+        "enabling structurally lighter wings."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_cfd_methods(story):
+    story.append(PageBreak())
+    heading("CFD Methods — Theory and Practice", 0, story)
+
+    heading("Panel methods", 1, story)
+    story.append(p(
+        "For inviscid incompressible flow (or P-G-corrected) over "
+        "arbitrary shapes, Hess-Smith distributes sources and doublets "
+        "on body panels and enforces flow tangency. O(N²) in panel "
+        "count. Doublet-lattice (Albano-Rodden 1969) extends to "
+        "unsteady oscillatory flow and is the workhorse of flutter "
+        "analysis."))
+
+    heading("Vortex lattice", 1, story)
+    story.append(p(
+        "Wings represented by horseshoe vortices on a flat camber "
+        "surface, trailing legs aligned with freestream. Computes "
+        "C<sub>L</sub>, induced drag, span-loading. Mark Drela's AVL "
+        "is the canonical open-source tool for preliminary design and "
+        "stability-derivative estimation. Limitations: no thickness, no "
+        "viscous effects, no compressibility beyond P-G, no separation."))
+
+    heading("RANS turbulence models", 1, story)
+    for b in [
+        "<b>Spalart-Allmaras (1992)</b>: one transport equation for "
+        "modified eddy viscosity ν̃. Widely used in external aerodynamics. "
+        "Tolerates higher y<sup>+</sup> via near-wall linearisation.",
+        "<b>k-ε</b>: two equations. Poor at adverse pressure gradients "
+        "and separation; usually requires wall functions.",
+        "<b>k-ω SST (Menter, 1994)</b>: blends k-ω near walls with k-ε "
+        "in the far-field via F1 blending. Best general-purpose RANS "
+        "model for separated/adverse-pressure flows. Industry default "
+        "for high-lift, wings, rotorcraft.",
+    ]:
+        story.append(bullet(b))
+    story.append(p(
+        "Wall resolution: y<sup>+</sup> &lt; 1 on first cell, 30-40 "
+        "cells across boundary layer, wall-normal growth rate &lt; 1.2."))
+
+    heading("LES, DES, hybrid", 1, story)
+    story.append(p(
+        "<b>LES</b> resolves eddies down to grid scale; y<sup>+</sup> ≈ "
+        "1 in all three directions, Δx<sup>+</sup>, Δz<sup>+</sup> ~ 50. "
+        "Cost ~ Re<sup>2.5</sup> for wall-resolved LES — prohibitive at "
+        "flight Re."))
+    story.append(p(
+        "<b>DES/DDES/IDDES</b> (Spalart 1997): RANS in attached boundary "
+        "layers, LES in separated regions. Affordable for massively "
+        "separated flows (high α, post-stall, store separation)."))
+
+    heading("Validation cases", 1, story)
+    story.append(p(
+        "AGARD AR-303 and AR-138, NASA Turbulence Modeling Resource "
+        "(turbmodels.larc.nasa.gov), DLR-F6/F11 high-lift, NASA Common "
+        "Research Model (CRM), HiLiftPW workshops, AIAA Drag Prediction "
+        "Workshops 1-7. CFL3D, FUN3D and OVERFLOW are the reference codes."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_forced_oscillation(story):
+    story.append(PageBreak())
+    heading("Forced Oscillation and Damping Derivatives", 0, story)
+
+    heading("Setup", 1, story)
+    story.append(p(
+        "Impose a sinusoidal motion at frequency ω. For pitch:"))
+    math("α(t) = α<sub>0</sub> + Δα sin(ωt), &nbsp; q(t) = ωΔα cos(ωt)")
+    story.append(p(
+        "Time-accurate CFD runs ~5 cycles to dissipate startup transients; "
+        "data from cycles 3-5. Best practice: ≥100 time steps per cycle, "
+        "dual time-stepping with 30-50 inner iterations."))
+
+    heading("Reduced frequency", 1, story)
+    math("k = ω L<sub>ref</sub> / (2 V<sub>∞</sub>)")
+    story.append(p(
+        "Ratio of unsteady to convective time scales. k → 0 is "
+        "quasi-steady (static derivatives only); k &gt; 0.05 includes "
+        "circulation lag and added-mass effects. Typical CFD forced "
+        "oscillation: k = 0.02-0.10."))
+
+    heading("Derivative extraction", 1, story)
+    math("C<sub>m</sub>(t) ≈ C<sub>m0</sub> + C<sub>mα</sub>Δα + "
+         "(C<sub>mq</sub> + C<sub>m<font name='DejaVu'>α̇</font></sub>)(<font name='DejaVu'>c̄</font>/(2V))Δα·ω·cos(ωt)/sin(ωt)·... ")
+    story.append(p(
+        "Fourier integration over one cycle:"))
+    code(
+        "C_mα   ≈ (1/(π Δα)) ∫₀^(2π/ω) C_m(t) sin(ωt) dt\n"
+        "C_mq + C_mα̇ ≈ (1/(π k Δα)) ∫₀^(2π/ω) C_m(t) cos(ωt) dt")
+    story.append(p(
+        "The pure damping C<sub>mq</sub> and <font name='DejaVu'>α̇</font>-lag C<sub>m<font name='DejaVu'>α̇</font></sub> "
+        "cannot be separated from a single pitch-only oscillation; one "
+        "needs a plunge (varying α at fixed q) or a combined schedule. "
+        "Many handbooks publish the sum (C<sub>mq</sub> + C<sub>m<font name='DejaVu'>α̇</font></sub>) "
+        "and split it roughly 70/30."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_geodesy_wgs84(story):
+    story.append(PageBreak())
+    heading("Geodesy and the WGS-84 Ellipsoid", 0, story)
+    story.append(p(
+        "JSBSim integrates its equations of motion in the inertial frame "
+        "and transforms to the WGS-84 ellipsoid for output. This chapter "
+        "is the reference for the geodetic constants and conventions."))
+
+    heading("WGS-84 defining constants", 1, story)
+    table_data = [
+        ["Symbol", "Value", "Description"],
+        ["a", "6 378 137.0 m (exact)", "Semi-major axis"],
+        ["1/f", "298.257 223 563 (exact)", "Reciprocal flattening"],
+        ["GM",  "3.986 004 418 × 10¹⁴ m³/s²", "Earth gravitational param."],
+        ["ω",   "7.292 115 × 10⁻⁵ rad/s", "Earth rotation rate"],
+        ["b",   "6 356 752.3142 m", "Semi-minor axis, b = a(1−f)"],
+        ["e²",  "6.694 379 990 14 × 10⁻³",
+         "First eccentricity² = 2f − f²"],
+        ["e'²", "6.739 496 742 28 × 10⁻³",
+         "Second eccentricity² = e²/(1−e²)"],
+        ["J2",  "1.082 626 7 × 10⁻³",
+         "Second zonal harmonic (un-normalised)"],
+        ["R<sub>V</sub>", "6 371 000.79 m", "Mean (volumetric) radius"],
+        ["γ<sub>e</sub>", "9.780 325 m/s²", "Normal gravity at equator"],
+        ["γ<sub>p</sub>", "9.832 185 m/s²", "Normal gravity at pole"],
+        ["g<sub>0</sub>", "9.806 65 m/s²", "Standard gravity (definitional)"],
+        ["Sidereal day", "86 164.0905 s", "Length of sidereal day"],
+    ]
+    t = Table(wrap_table(table_data),
+              colWidths=[2.6 * cm, 4.8 * cm, 9.0 * cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0d3b66")),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.white, colors.HexColor("#f4f7fa")]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(t)
+
+    heading("Geodetic vs geocentric latitude", 1, story)
+    math("tan(φ<sub>c</sub>) = (1 − e²) tan(φ<sub>g</sub>)")
+    story.append(p(
+        "The two differ by up to 11.55 arc-min ≈ 0.19° near φ = 45° — "
+        "equivalent to 21.4 km of north-south distance on Earth's surface. "
+        "Aviation always uses geodetic latitude (GPS, charts, autopilots). "
+        "JSBSim internal calculations sometimes use geocentric; output is "
+        "in both."))
+
+    heading("Altitude definitions", 1, story)
+    for b in [
+        "<b>Ellipsoidal (geodetic) height h</b> — signed distance to "
+        "WGS-84 ellipsoid along the ellipsoid normal. Native GPS output.",
+        "<b>Orthometric height H</b> — height above the geoid (mean sea "
+        "level equipotential). Water flows from high H to low H. Charts "
+        "use this.",
+        "<b>Geoid undulation N</b> — h = H + N. Globally N ∈ [−105 m, "
+        "+85 m] versus WGS-84. EGM96/EGM2008 give global geoid models.",
+        "<b>Pressure altitude</b> — altitude in ISA at which the measured "
+        "pressure occurs. Altimeter with 29.92 inHg setting.",
+        "<b>Density altitude</b> — same concept for density. Predicts "
+        "aircraft and engine performance.",
+        "<b>Geopotential altitude</b> — H<sub>geopot</sub> = R·H<sub>geom</sub>/(R + H<sub>geom</sub>). "
+        "Used by the standard atmosphere model so that the hydrostatic "
+        "equation has constant g.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Radii of curvature", 1, story)
+    math("M(φ) = a(1−e²) / (1 − e² sin²φ)<sup>3/2</sup> &nbsp;(meridian)")
+    math("N(φ) = a / √(1 − e² sin²φ) &nbsp;(prime vertical)")
+    story.append(p(
+        "At equator M = a(1−e²), N = a; at the pole M = N = a/√(1−e²) "
+        "≈ 6 399 593.6 m. Distance per radian: north-south M; east-west "
+        "N cos φ. One arc-minute of latitude at the equator equals "
+        "1843 m; one nautical mile is exactly 1852 m by definition."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_coord_transforms(story):
+    story.append(PageBreak())
+    heading("Coordinate Transformations in Detail", 0, story)
+
+    heading("Geodetic → ECEF (closed form)", 1, story)
+    code(
+        "x = (N + h) cos(φ) cos(λ)\n"
+        "y = (N + h) cos(φ) sin(λ)\n"
+        "z = (N (1 - e²) + h) sin(φ)\n"
+        "where N(φ) = a / sqrt(1 - e² sin²φ)")
+    story.append(p(
+        "Three multiplications and a square root. JSBSim uses this every "
+        "tick to map the integrated inertial position to a geodetic "
+        "(lat, lon, alt) triple for output."))
+
+    heading("ECEF → Geodetic (Bowring iteration)", 1, story)
+    code(
+        "p = sqrt(x² + y²)\n"
+        "φ_0 = atan2(z, p (1 - e²))\n"
+        "repeat:\n"
+        "    N_i = a / sqrt(1 - e² sin² φ_i)\n"
+        "    h_i = p / cos(φ_i) - N_i\n"
+        "    φ_{i+1} = atan2(z, p (1 - e² N_i / (N_i + h_i)))\n"
+        "until |φ_{i+1} - φ_i| < 1e-12\n"
+        "λ = atan2(y, x)")
+    story.append(p(
+        "Convergence in 3 iterations to 10⁻¹¹ rad ≈ 0.06 mm anywhere on "
+        "Earth. Heikkinen (1982) and Olson (1996) give iteration-free "
+        "closed-form alternatives; Vermeille (2011) is accurate to "
+        "nanometres within 5000 km of the ellipsoid."))
+
+    heading("ECEF → ECI rotation", 1, story)
+    code(
+        "| x_ECI |   |  cos(θ)  -sin(θ)  0 |   | x_ECEF |\n"
+        "| y_ECI | = |  sin(θ)   cos(θ)  0 | * | y_ECEF |\n"
+        "| z_ECI |   |    0        0     1 |   | z_ECEF |")
+    story.append(p(
+        "θ is the Greenwich Mean Sidereal Time (GMST). For precision work "
+        "you augment with precession P, nutation N, polar motion W: "
+        "GCRF = P<sup>T</sup>N<sup>T</sup>R<sup>T</sup>W<sup>T</sup> · "
+        "ITRF. For aircraft sim the bare rotation is enough."))
+
+    heading("ECEF → NED at (φ₀, λ₀)", 1, story)
+    code(
+        "                | -sin(φ₀)cos(λ₀)  -sin(φ₀)sin(λ₀)   cos(φ₀) |\n"
+        "R_NED^ECEF =    | -sin(λ₀)           cos(λ₀)            0     |\n"
+        "                | -cos(φ₀)cos(λ₀)  -cos(φ₀)sin(λ₀)  -sin(φ₀) |")
+    story.append(p(
+        "ENU follows by swapping the first two rows and negating the "
+        "third. JSBSim caches both NED-from-ECEF and ECEF-from-NED "
+        "matrices each tick."))
+
+    heading("NED → Body (3-2-1 Tait-Bryan)", 1, story)
+    math("R<sup>b</sup><sub>n</sub> = R<sub>x</sub>(φ) R<sub>y</sub>(θ) R<sub>z</sub>(ψ)")
+    story.append(p(
+        "Multiplied out:"))
+    code(
+        "          | cθcψ                    cθsψ                   -sθ    |\n"
+        "R_b_n =   | sφsθcψ - cφsψ           sφsθsψ + cφcψ          sφcθ  |\n"
+        "          | cφsθcψ + sφsψ           cφsθsψ - sφcψ          cφcθ  |")
+    story.append(p(
+        "Singularity at θ = ±90° is the canonical gimbal lock — which is "
+        "why JSBSim integrates the quaternion form and only exports "
+        "Euler angles."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_earth_gravity(story):
+    story.append(PageBreak())
+    heading("Earth Rotation and Gravity", 0, story)
+
+    heading("Earth rotation rate and fictitious forces", 1, story)
+    story.append(p(
+        "The rotating ECEF frame is non-inertial. Newton's law acquires "
+        "Coriolis and centrifugal terms:"))
+    math("<b>a</b><sub>inertial</sub> = <b>a</b><sub>ECEF</sub> + 2 <b>Ω</b> × <b>v</b> + <b>Ω</b> × (<b>Ω</b> × <b>r</b>)")
+    story.append(p(
+        "At Mach 0.8 cruise (~250 m/s) at mid-latitudes, Coriolis is "
+        "~0.036 m/s² (0.0037 g) — small but accumulates to substantial "
+        "heading and track errors over flight-hour timescales if "
+        "neglected. The centrifugal term at the equator is ~0.034 m/s² "
+        "outward, which is precisely why measured surface gravity at the "
+        "equator (9.780 m/s²) is less than the pure gravitational pull "
+        "(9.814 m/s²). Centrifugal is conventionally folded into the "
+        "gravity model so only Coriolis remains explicit in the EOMs."))
+
+    heading("Spherical gravity (simple)", 1, story)
+    math("g(r) = GM / r² &nbsp;(outward radial direction)")
+    story.append(p(
+        "At sea level r = 6 378 km, g ≈ 9.798 m/s². Adequate for many "
+        "aircraft simulations; JSBSim default."))
+
+    heading("Somigliana normal gravity (WGS-84 surface)", 1, story)
+    math("γ(φ) = γ<sub>e</sub> (1 + k sin²φ) / √(1 − e² sin²φ)")
+    story.append(p(
+        "with γ<sub>e</sub> = 9.7803254 m/s² and "
+        "k = (b γ<sub>p</sub> − a γ<sub>e</sub>)/(a γ<sub>e</sub>) "
+        "≈ 0.001932. Free-air correction for altitude:"))
+    math("γ(φ, h) ≈ γ(φ)[1 − (2/a)(1 + f + m − 2f sin²φ) h + (3/a²) h²]")
+    story.append(p(
+        "with m = ω<sub>E</sub>² a² b / GM ≈ 3.45 × 10⁻³."))
+
+    heading("J2 gravity perturbation", 1, story)
+    story.append(p(
+        "The leading-order departure of the Earth's gravity field from a "
+        "spherical mass:"))
+    math("a<sub>J2</sub> = −(3 J2 GM a²)/(2 r⁴) × [(1−5sin²φ<sub>c</sub>)x̂, "
+         "(1−5sin²φ<sub>c</sub>)ŷ, (3−5sin²φ<sub>c</sub>)ẑ]")
+    story.append(p(
+        "For aircraft below 20 km altitude on flights under 24 hours, "
+        "Somigliana-with-altitude suffices. For launch vehicles, missiles "
+        "and orbital reentry, J2 (and often J3, J4) are required."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_magnetic_navigation(story):
+    story.append(PageBreak())
+    heading("Magnetic Field and Navigation", 0, story)
+
+    heading("The World Magnetic Model (WMM 2025)", 1, story)
+    story.append(p(
+        "The WMM is the joint NCEI / British Geological Survey / NGA "
+        "standard for the geomagnetic main field. The current model is "
+        "WMM2025, valid through 31 December 2029. The field is a "
+        "spherical-harmonic series (degree/order 12 standard, 133 for the "
+        "high-resolution WMMHR2025), each Gauss coefficient varying "
+        "linearly in time over the model epoch."))
+    story.append(p(
+        "At a given (φ, λ, h, t) the model outputs the three geocentric "
+        "components (X north, Y east, Z down), from which:"))
+    for b in [
+        "Total intensity F = √(X² + Y² + Z²)",
+        "Horizontal intensity H = √(X² + Y²)",
+        "Magnetic declination D = atan2(Y, X) — angle from true north to "
+        "magnetic north, positive east",
+        "Magnetic inclination (dip) I = atan2(Z, H) — angle from horizontal",
+    ]:
+        story.append(bullet(b))
+    story.append(p(
+        "Convert true to magnetic heading: ψ<sub>mag</sub> = ψ<sub>true</sub> − D. "
+        "Magnetic compasses also need a deviation card (airframe-specific) "
+        "and exhibit northerly-turning errors due to dip."))
+
+    heading("GPS in WGS-84", 1, story)
+    story.append(p(
+        "The GPS constellation broadcasts ephemerides in WGS-84 ECEF and "
+        "satellite times in GPST. A receiver solves the four-unknown "
+        "system (3 ECEF coords + clock bias) from pseudorange equations"))
+    math("ρ<sub>i</sub> = |<b>r</b><sub>sat,i</sub> − <b>r</b><sub>rx</sub>| + c·Δt<sub>rx</sub> + ε<sub>i</sub>")
+    story.append(p(
+        "via weighted least squares or an extended Kalman filter. The "
+        "ECEF solution is then converted to (φ, λ, h) by the closed-form "
+        "or iterative algorithms of the previous chapter. Modern "
+        "INS-aided GNSS systems achieve sub-meter accuracy in dynamic "
+        "operation."))
+
+    heading("Haversine great-circle distance", 1, story)
+    code(
+        "a = sin²((φ₂-φ₁)/2) + cos(φ₁) cos(φ₂) sin²((λ₂-λ₁)/2)\n"
+        "c = 2 atan2(√a, √(1-a))\n"
+        "d = R_E · c")
+    story.append(p(
+        "with R<sub>E</sub> ≈ 6 371 km. Initial bearing:"))
+    code(
+        "θ_i = atan2(sin(Δλ) cos(φ₂), cos(φ₁) sin(φ₂) - sin(φ₁) cos(φ₂) cos(Δλ))")
+    story.append(p(
+        "Errors below 0.3% versus the oblate Earth. Vincenty's iterative "
+        "method (or Karney's variant) gives geodesic distances to "
+        "submillimetre on WGS-84."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_time_systems(story):
+    story.append(PageBreak())
+    heading("Time Systems in Aerospace", 0, story)
+    story.append(p(
+        "Five clocks matter. Getting them straight is the difference "
+        "between a sim that ties cleanly to GPS, ephemerides, and "
+        "magnetic-field models — and one that doesn't."))
+
+    table_data = [
+        ["Scale", "Definition", "Use"],
+        ["TAI", "International Atomic Time. Uniform SI seconds.",
+            "Foundation; no discontinuities."],
+        ["UTC", "= TAI − N leap seconds; |UT1−UTC|&lt;0.9 s.",
+            "Civil time. UTC = TAI − 37 s (2026)."],
+        ["UT1", "Earth-rotation time (mean sun on meridian → noon).",
+            "Drifts; broadcast as DUT1 = UT1−UTC."],
+        ["GPST", "Atomic; started at UTC on 1980-01-06.",
+            "GPS satellite time; = TAI − 19 s."],
+        ["TT",   "= TAI + 32.184 s (definitional).",
+            "Solar-system ephemerides."],
+        ["GMST", "Greenwich Mean Sidereal Time.",
+            "ECEF↔ECI rotation; +3min 56.6 s/day vs UTC."],
+    ]
+    t = Table(wrap_table(table_data),
+              colWidths=[2.5 * cm, 7.5 * cm, 6.4 * cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1d5d9b")),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.white, colors.HexColor("#f4f7fa")]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(t)
+    story.append(p(
+        "GMST formula (approximate, degrees):"))
+    code(
+        "GMST = 280.46061837 + 360.98564736629·d + 0.000387933·T² − T³/38710000\n"
+        "with d = days from J2000.0, T = centuries from J2000.0.")
+
+
+# ----------------------------------------------------------------------------
+def add_ext_atmosphere_deep(story):
+    story.append(PageBreak())
+    heading("The Standard Atmosphere in Depth", 0, story)
+    story.append(p(
+        "JSBSim's <font face='Courier'>FGStandardAtmosphere</font> "
+        "implements the 1976 US Standard Atmosphere (NASA-TM-X-74335). "
+        "ICAO Standard Atmosphere is identical to 32 km."))
+
+    heading("Sea-level reference", 1, story)
+    table_data = [
+        ["Quantity", "Symbol", "Value"],
+        ["Temperature",      "T<sub>0</sub>",   "288.15 K (15°C)"],
+        ["Pressure",         "p<sub>0</sub>",   "101 325 Pa"],
+        ["Density",          "ρ<sub>0</sub>",   "1.225 kg/m³"],
+        ["Speed of sound",   "a<sub>0</sub>",   "340.294 m/s"],
+        ["Dynamic viscosity","μ<sub>0</sub>",  "1.7894 × 10⁻⁵ Pa·s"],
+        ["Specific gas const","R",              "287.058 J/(kg·K)"],
+        ["Ratio of specific heats","γ",         "1.40"],
+        ["g₀",               "g<sub>0</sub>",   "9.806 65 m/s²"],
+    ]
+    t = Table(wrap_table(table_data),
+              colWidths=[5.0 * cm, 3.0 * cm, 8.4 * cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1d5d9b")),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.white, colors.HexColor("#f4f7fa")]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(t)
+
+    heading("Layer structure (0 to 86 km)", 1, story)
+    table_data = [
+        ["Layer", "Base alt (km)", "Top alt (km)", "Lapse rate L (K/km)"],
+        ["Troposphere",   "0",  "11",  "−6.5"],
+        ["Tropopause",    "11", "20",  "0"],
+        ["Stratosphere 1","20", "32",  "+1.0"],
+        ["Stratosphere 2","32", "47",  "+2.8"],
+        ["Stratopause",   "47", "51",  "0"],
+        ["Mesosphere 1",  "51", "71",  "−2.8"],
+        ["Mesosphere 2",  "71", "84.852", "−2.0"],
+    ]
+    t = Table(wrap_table(table_data),
+              colWidths=[3.6 * cm, 3.0 * cm, 3.0 * cm, 6.8 * cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1d5d9b")),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.white, colors.HexColor("#f4f7fa")]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(t)
+    story.append(p(
+        "Within each non-isothermal layer, the hydrostatic equation"))
+    math("dp/dh = −ρ g, &nbsp; p = ρRT, &nbsp; T(h) = T<sub>b</sub> + L(h − h<sub>b</sub>)")
+    story.append(p("integrates to"))
+    math("p(h) = p<sub>b</sub> · [T<sub>b</sub>/(T<sub>b</sub> + L(h−h<sub>b</sub>))]"
+         "<sup>g<sub>0</sub>/(R·L)</sup>")
+    story.append(p(
+        "For isothermal layers (L = 0), the solution is exponential:"))
+    math("p(h) = p<sub>b</sub> · exp[ −g<sub>0</sub>(h − h<sub>b</sub>)/(R T<sub>b</sub>) ]")
+
+    heading("Derived quantities", 1, story)
+    math("a = √(γRT) &nbsp;(speed of sound)")
+    math("M = V/a &nbsp;(Mach number)")
+    math("μ(T) = μ<sub>ref</sub>(T/T<sub>ref</sub>)<sup>1.5</sup>(T<sub>ref</sub> + S)/(T + S)")
+    story.append(p(
+        "(Sutherland's law, with S = 110.4 K for air). Reynolds number "
+        "Re = ρVL/μ. Total/stagnation pressure and temperature:"))
+    math("p<sub>t</sub> = p(1 + (γ−1)/2 · M²)<sup>γ/(γ−1)</sup>")
+    math("T<sub>t</sub> = T(1 + (γ−1)/2 · M²)")
+
+
+# ----------------------------------------------------------------------------
+def add_ext_wind_turbulence(story):
+    story.append(PageBreak())
+    heading("Wind, Turbulence, and Gusts", 0, story)
+
+    heading("Wind profile near the surface", 1, story)
+    math("u(z) = (u<sub>*</sub>/κ) ln(z/z<sub>0</sub>) &nbsp;(log law, κ ≈ 0.41)")
+    math("u(h) = u<sub>ref</sub> (h/h<sub>ref</sub>)<sup>α</sup> &nbsp;(power law, α ≈ 1/7 over open terrain)")
+
+    heading("Discrete gusts (MIL-F-8785C 1-cosine)", 1, story)
+    math("V<sub>gust</sub>(t) = (V<sub>m</sub>/2) (1 − cos(πt/T<sub>m</sub>))")
+    story.append(p(
+        "Used for handling-qualities certification. T<sub>m</sub> ranges "
+        "from 0.5 s (small UAV) to several seconds (transports); "
+        "V<sub>m</sub> 5-15 m/s typical."))
+
+    heading("Continuous turbulence — Dryden PSD", 1, story)
+    math("Φ<sub>u</sub>(ω) = σ<sub>u</sub>² · (2L<sub>u</sub>/V) / (1 + (L<sub>u</sub>ω/V)²)")
+    math("Φ<sub>v</sub>(ω) = σ<sub>v</sub>² · (L<sub>v</sub>/V) · "
+         "(1 + 3(L<sub>v</sub>ω/V)²) / (1 + (L<sub>v</sub>ω/V)²)²")
+    math("Φ<sub>w</sub>(ω) = σ<sub>w</sub>² · (L<sub>w</sub>/V) · "
+         "(1 + 3(L<sub>w</sub>ω/V)²) / (1 + (L<sub>w</sub>ω/V)²)²")
+    story.append(p(
+        "Scale lengths L<sub>u,v,w</sub> and intensities σ<sub>u,v,w</sub> "
+        "are specified by altitude band in MIL-F-8785C / MIL-HDBK-1797. "
+        "Light/moderate/severe intensity probabilities decrease with "
+        "altitude; turbulence above the tropopause is rare."))
+    story.append(p(
+        "<b>Von Kármán PSD</b> is an alternative (more accurate at high "
+        "frequencies) commonly used in flutter analysis."))
+
+    heading("Microburst (Vicroy)", 1, story)
+    story.append(p(
+        "A microburst is modelled as a three-component flow field: "
+        "horizontal outflow + downdraft + vortex ring. Vicroy's analytical "
+        "model parameterises the radial outflow profile by core radius, "
+        "altitude of the vortex ring, and outflow peak velocity. Used for "
+        "wind-shear-recovery training scenarios."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_propulsion_theory(story):
+    story.append(PageBreak())
+    heading("Propulsion Theory", 0, story)
+
+    heading("Piston engines — Otto cycle", 1, story)
+    story.append(p(
+        "Four-stroke engine: intake, compression (adiabatic), combustion "
+        "(constant volume), expansion (adiabatic), exhaust. Ideal Otto "
+        "efficiency η = 1 − (1/r)<sup>γ−1</sup> with compression ratio r. "
+        "BSFC typical 0.4-0.5 lb/(hp·hr) for normally aspirated avgas "
+        "engines."))
+    story.append(p(
+        "Performance scales with manifold absolute pressure (MAP), "
+        "RPM, and mixture. <font face='Courier'>FGPiston</font> uses a "
+        "parabolic power-vs-MAP relation and linear scaling with throttle/"
+        "RPM. Altitude derating accounts for ambient density decrease "
+        "(unless supercharged or turbocharged)."))
+
+    heading("Turbine — Brayton cycle", 1, story)
+    story.append(p(
+        "Continuous-flow cycle: compression, combustion (≈constant "
+        "pressure), expansion. Ideal Brayton efficiency η = 1 − (1/π)"
+        "<sup>(γ−1)/γ</sup> with pressure ratio π. Modern turbofans π ≈ "
+        "30-50, TSFC 0.30-0.50 lb/(lbf·hr) cruise, 1.5-2.5 with AB on."))
+    story.append(p(
+        "<b>Bypass ratio</b>: pure jet ≈ 0; military low-bypass ≈ 0.3; "
+        "commercial high-bypass ≈ 10-12 (GE9X, Trent XWB). High-bypass = "
+        "more mass flow at lower velocity = quieter and more efficient at "
+        "subsonic speeds."))
+    story.append(p(
+        "<b>Two-spool architecture</b>: N1 (low-pressure spool, fan) and "
+        "N2 (high-pressure spool, compressor + turbine). N1 is the "
+        "primary thrust-rating parameter on most commercial engines."))
+
+    heading("Rocket — F = ṁ V<sub>e</sub> + (p<sub>e</sub> − p<sub>a</sub>)A<sub>e</sub>", 1, story)
+    math("I<sub>sp</sub> = F / (ṁ · g<sub>0</sub>) &nbsp;(seconds)")
+    story.append(p(
+        "Specific impulse measures fuel efficiency. Typical values: "
+        "solid propellant 250 s, RP-1/LOX 350 s, LH2/LOX 450 s, ion "
+        "&gt;3000 s. Tsiolkovsky rocket equation:"))
+    math("Δv = I<sub>sp</sub> g<sub>0</sub> ln(m<sub>0</sub>/m<sub>f</sub>)")
+    story.append(p(
+        "Orbital insertion requires Δv ≈ 9-10 km/s including gravity and "
+        "drag losses. Multi-staging is necessary because m<sub>0</sub>/m<sub>f</sub> "
+        "is exponential in Δv."))
+
+    heading("Electric motors — BLDC", 1, story)
+    story.append(p(
+        "Brushless DC motor obeys (per phase):"))
+    math("V = K<sub>e</sub>·ω + I·R, &nbsp; τ = K<sub>t</sub>·I, &nbsp; "
+         "K<sub>t</sub> = 1/K<sub>v</sub> in SI units")
+    story.append(p(
+        "with K<sub>v</sub> in rpm/V (hobby convention). Power "
+        "P = V·I = ω·τ + I²·R; the second term is resistive loss. "
+        "Efficiency η = ω·τ / (V·I) peaks at intermediate loads (~50-70% "
+        "rated current)."))
+    story.append(p(
+        "Battery: LiPo cells nominal 3.7 V (4.2 V max, 3.0 V min); "
+        "C-rating limits peak discharge (e.g. 25 C × 5000 mAh = 125 A "
+        "max). State-of-charge integrates current over time: "
+        "SoC(t) = SoC(0) − ∫I/Q · dt."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_propeller_rotor(story):
+    story.append(PageBreak())
+    heading("Propeller and Rotor Theory", 0, story)
+
+    heading("Propeller — momentum + blade element", 1, story)
+    story.append(p(
+        "Momentum theory (Froude): an ideal disc accelerates the flow "
+        "from V to V+2v<sub>i</sub>, producing thrust"))
+    math("T = 2 ρ A (V + v<sub>i</sub>) v<sub>i</sub>")
+    story.append(p(
+        "with v<sub>i</sub> the induced velocity at the disc. Power "
+        "P = T (V + v<sub>i</sub>); efficiency η = TV/P → 1 only at zero "
+        "v<sub>i</sub> (infinite disc area, the actuator-disc limit)."))
+    story.append(p(
+        "Blade-element theory analyses each blade element as a 2-D airfoil "
+        "with local α and V<sub>resultant</sub>. JSBSim's "
+        "<font face='Courier'>FGPropeller</font> uses tabulated C<sub>T</sub>"
+        "(J) and C<sub>P</sub>(J) curves where the advance ratio is"))
+    math("J = V / (n·D), &nbsp; n in rev/s, D = diameter")
+    math("Thrust = C<sub>T</sub>(J) · ρ · n² · D⁴")
+    math("Power = C<sub>P</sub>(J) · ρ · n³ · D⁵")
+    math("Efficiency η<sub>p</sub> = J · C<sub>T</sub> / C<sub>P</sub>")
+
+    heading("P-factor and prop-induced effects", 1, story)
+    for b in [
+        "<b>P-factor</b>: at non-zero α the descending blade has a higher "
+        "local angle of attack than the ascending blade, producing a "
+        "lateral thrust offset that yaws the aircraft.",
+        "<b>Slipstream rotation</b>: the prop wash spirals, hitting the "
+        "vertical tail asymmetrically and producing a yaw moment.",
+        "<b>Gyroscopic precession</b>: a pitching aircraft applies an "
+        "input torque about the lateral axis; spinning prop reacts with "
+        "a precessional yaw, and vice versa.",
+        "<b>Torque reaction</b>: Newton's third law — the engine torquing "
+        "the prop one way torques the aircraft the other way. Sense "
+        "(clockwise vs counter-clockwise from cockpit) determines which.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Constant-speed propellers", 1, story)
+    story.append(p(
+        "A governor adjusts blade pitch to hold a commanded RPM regardless "
+        "of throttle setting. JSBSim's <font face='Courier'>&lt;constspeed&gt;1"
+        "&lt;/constspeed&gt;</font> in the propeller XML enables this. "
+        "Below the governor range, the prop reverts to fixed pitch at "
+        "<font face='Courier'>&lt;minpitch&gt;</font>. Beta range (below "
+        "flight idle) and reverse (negative pitch) are supported on "
+        "turboprops."))
+
+    heading("Helicopter rotor", 1, story)
+    story.append(p(
+        "A rotor is a propeller that also generates lift. The thrust at "
+        "hover (momentum theory):"))
+    math("T = 2 ρ A v<sub>i</sub>², &nbsp; v<sub>i</sub> = √(T/(2ρA))")
+    story.append(p(
+        "<b>Translational lift</b>: in forward flight the inflow becomes "
+        "asymmetric; advancing blade sees V + ω·r, retreating sees ω·r − V. "
+        "The retreating blade approaches stall at high forward speed — "
+        "the helicopter's V<sub>NE</sub> limit."))
+    story.append(p(
+        "<b>Cyclic pitch</b>: blade pitch varies once per revolution to "
+        "tilt the rotor disc, generating forces in any direction. "
+        "<b>Collective pitch</b>: all blades change pitch together, "
+        "controlling thrust magnitude. JSBSim's "
+        "<font face='Courier'>FGRotor</font> implements blade-element + "
+        "momentum theory with flapping dynamics; the X-15 and Pterosaur "
+        "examples are good starting points."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_signal_processing(story):
+    story.append(PageBreak())
+    heading("Signal Processing for FCS", 0, story)
+
+    heading("Continuous-time filters", 1, story)
+    math("Lag: &nbsp; H(s) = c<sub>1</sub>/(s + c<sub>1</sub>)")
+    math("Lead-lag: &nbsp; H(s) = (c<sub>1</sub>s + c<sub>2</sub>)/(c<sub>3</sub>s + c<sub>4</sub>)")
+    math("Washout: &nbsp; H(s) = s/(s + c<sub>1</sub>)")
+    math("Second-order: &nbsp; H(s) = (c<sub>1</sub>s² + c<sub>2</sub>s + c<sub>3</sub>)/"
+         "(c<sub>4</sub>s² + c<sub>5</sub>s + c<sub>6</sub>)")
+    story.append(p(
+        "All four are the JSBSim filter components from Chapter 12. "
+        "Coefficients c<sub>1..6</sub> are taken directly from the design "
+        "in the continuous-time s-plane."))
+
+    heading("Discretisation: bilinear (Tustin) transform", 1, story)
+    math("s ← (2/T) · (z − 1)/(z + 1)")
+    story.append(p(
+        "Tustin maps the entire left half-plane (stable continuous) into "
+        "the unit disc (stable discrete) so stability is preserved. "
+        "Frequencies are warped: ω<sub>d</sub> = (2/T) tan(ω<sub>a</sub>T/2). "
+        "For critical pole/zero frequencies, &quot;prewarping&quot; "
+        "(replacing 2/T with ω<sub>0</sub>/tan(ω<sub>0</sub>T/2)) "
+        "preserves the location exactly."))
+
+    heading("PID discretisation", 1, story)
+    code(
+        "u(z) = K_p · e(z)\n"
+        "     + K_i · T/2 · (1 + z⁻¹)/(1 − z⁻¹) · e(z)   (trapezoidal)\n"
+        "     + K_d · (1 − z⁻¹)/T · e(z)                  (backward Euler)")
+    story.append(p(
+        "JSBSim's <font face='Courier'>&lt;pid&gt;</font> offers four "
+        "integration methods (rect = backward Euler, trap = trapezoidal, "
+        "ab2/ab3 = Adams-Bashforth). The "
+        "<font face='Courier'>&lt;trigger&gt;</font> element provides "
+        "anti-windup: when non-zero the integral is frozen, when "
+        "negative it is reset."))
+
+    heading("PID tuning rules", 1, story)
+    table_data = [
+        ["Method", "Kp", "Ki", "Kd"],
+        ["Ziegler-Nichols (oscillation)",
+            "0.6·K<sub>u</sub>", "1.2·K<sub>u</sub>/T<sub>u</sub>", "0.075·K<sub>u</sub>·T<sub>u</sub>"],
+        ["Lambda tuning (FOPDT, λ = closed-loop τ)",
+            "τ/(K(λ+θ))", "Kp/τ", "0 (no D)"],
+        ["IMC PI",
+            "(2τ+θ)/(2K(λ+θ))", "Kp/(τ+θ/2)", "—"],
+    ]
+    t = Table(wrap_table(table_data),
+              colWidths=[5.5 * cm, 3.6 * cm, 3.6 * cm, 3.8 * cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1d5d9b")),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.white, colors.HexColor("#f4f7fa")]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(t)
+
+
+# ----------------------------------------------------------------------------
+def add_ext_lcp_friction(story):
+    story.append(PageBreak())
+    heading("Linear Complementarity and Contact Friction", 0, story)
+
+    heading("The LCP formulation", 1, story)
+    story.append(p(
+        "A Linear Complementarity Problem seeks <b>z</b> ∈ ℝⁿ such that"))
+    math("<b>w</b> = M<b>z</b> + <b>q</b>, &nbsp; <b>w</b> ≥ 0, &nbsp; <b>z</b> ≥ 0, &nbsp; <b>w</b><sup>T</sup><b>z</b> = 0")
+    story.append(p(
+        "i.e. for each i, either w<sub>i</sub> = 0 or z<sub>i</sub> = 0. "
+        "Contact-with-friction is naturally an LCP: z<sub>i</sub> is the "
+        "contact impulse at the i-th contact, w<sub>i</sub> is the relative "
+        "velocity normal to the surface; either there is a contact (z &gt; 0, "
+        "w = 0) or there is not (z = 0, w &gt; 0)."))
+
+    heading("JSBSim's gear LCP", 1, story)
+    story.append(p(
+        "Each landing-gear contact contributes:"))
+    for b in [
+        "A non-penetration constraint normal to the runway.",
+        "Coulomb friction constraints tangent to the runway (forward / "
+        "side / rolling resistance).",
+        "Brake torque from the FCS as an additional friction-cone limit.",
+    ]:
+        story.append(bullet(b))
+    story.append(p(
+        "JSBSim's <font face='Courier'>FGAccelerations::"
+        "CalculateFrictionForces()</font> solves the resulting LCP with "
+        "Projected Gauss-Seidel iteration (Catto 2005), up to 50 inner "
+        "iterations per tick. This is the same algorithm used in modern "
+        "game-physics engines (Bullet, ODE, Box2D)."))
+    story.append(p(
+        "<b>Why an LCP and not just an explicit force calculation?</b> "
+        "Because the stiff spring-damper-friction system is "
+        "unconditionally unstable under explicit integration if you allow "
+        "interpenetration. The LCP formulation projects the contact onto "
+        "the admissible constraint manifold each tick, which is "
+        "implicitly stable regardless of stiffness."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_trim_algorithm(story):
+    story.append(PageBreak())
+    heading("The Trim Algorithm Inside Out", 0, story)
+    story.append(p(
+        "<font face='Courier'>FGTrim</font> finds the aircraft state and "
+        "control settings that satisfy a steady-flight condition. It is "
+        "implemented as a composition of one-dimensional secant root-"
+        "finders coordinated by an outer loop."))
+
+    heading("FGTrimAxis: the unit cell", 1, story)
+    story.append(p(
+        "Each <font face='Courier'>FGTrimAxis</font> pairs a state "
+        "variable to zero out (e.g. <i>ẇ</i>) with a control variable "
+        "to vary (e.g. α). Given two control guesses with their "
+        "corresponding state values, the secant update is"))
+    math("x<sub>n+1</sub> = x<sub>n</sub> − f(x<sub>n</sub>) · (x<sub>n</sub> − x<sub>n−1</sub>) / (f(x<sub>n</sub>) − f(x<sub>n−1</sub>))")
+    story.append(p(
+        "JSBSim applies a 0.9 relaxation to dampen oscillations:"))
+    math("x<sub>n+1</sub> = x<sub>n</sub> − 0.9 f(x<sub>n</sub>) (Δx/Δf)")
+    story.append(p(
+        "If the secant step leaves the bracket, JSBSim falls back to "
+        "bisection on that axis. Each axis converges to a tolerance: "
+        "1e-3 for translational ẍ, 1e-4 (10× tighter) for angular <font name='DejaVu'>ω̇</font>."))
+
+    heading("Trim modes", 1, story)
+    table_data = [
+        ["Mode (TrimMode)", "States zeroed", "Controls varied"],
+        ["tLongitudinal",
+         "<i>u̇</i>=0, <i>ẇ</i>=0, <i><font name='DejaVu'>q̇</font></i>=0",
+         "throttle, α, elevator"],
+        ["tFull",
+         "+ <i><font name='DejaVu'>v̇</font></i>=0, <i>ṗ</i>=0, <i>ṙ</i>=0, ψ-track",
+         "+ φ, aileron, rudder, β"],
+        ["tFullWingsLevel", "tFull, but φ=0; β solves <i><font name='DejaVu'>v̇</font></i>=0",
+         "throttle, α, elevator, aileron, rudder, β"],
+        ["tGround",
+         "<i>ẇ</i>=0, <i><font name='DejaVu'>q̇</font></i>=0, <i>ṗ</i>=0",
+         "altitude (AGL), θ, φ"],
+        ["tPullup",
+         "longitudinal, n<sub>z</sub> = target",
+         "α, throttle, elevator"],
+        ["tTurn",
+         "coordinated turn at target bank",
+         "throttle, elevator, rudder"],
+        ["tTurnFull",
+         "coordinated turn + roll/yaw rates",
+         "full set"],
+        ["tCustom",
+         "user-built via AddState/RemoveState",
+         "user-chosen"],
+    ]
+    t = Table(wrap_table(table_data),
+              colWidths=[3.6 * cm, 6.0 * cm, 6.8 * cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1d5d9b")),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.white, colors.HexColor("#f4f7fa")]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(t)
+
+    heading("Outer loop and convergence", 1, story)
+    story.append(p(
+        "Defaults: <font face='Courier'>SetMaxCycles(60)</font> passes "
+        "through the axis list, <font face='Courier'>SetMaxCyclesPerAxis(100)"
+        "</font> iterations per inner axis. Within each cycle, axes are "
+        "trimmed in a fixed order. If all axes simultaneously meet their "
+        "tolerances after a full cycle, the trim is declared converged "
+        "and <font face='Courier'>simulation/trim-completed</font> is set "
+        "to 1; otherwise the time history is restored and an error is "
+        "raised."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_nesc_check_cases(story):
+    story.append(PageBreak())
+    heading("NASA NESC 2015 Verification Check Cases", 0, story)
+    story.append(p(
+        "JSBSim was the only open-source participant in the NASA "
+        "Engineering and Safety Center's 6-DoF verification programme "
+        "(NASA/TM-2015-218675). The other six tools were NASA in-house "
+        "simulators (LaSRS++, SES, Marvin, POST-II, OSIRIS, MAVERIC). The "
+        "NESC concluded that all seven simulators agreed to a publishable "
+        "degree on the majority of cases, with the remaining differences "
+        "explained and reducible."))
+
+    heading("Atmospheric flight cases", 1, story)
+    table_data = [
+        ["#", "Case", "Tests"],
+        ["1", "Dropped sphere, dragless",
+         "Free fall in uniform gravity"],
+        ["2", "Tumbling brick, dragless",
+         "Newton-Euler equations, inertia tensor"],
+        ["3", "Tumbling brick + aero damping",
+         "Adds damping moments to rigid-body case 2"],
+        ["4", "Dropped sphere, flat Earth",
+         "Tests gravity model selection"],
+        ["5", "Dropped sphere, rotating spherical Earth",
+         "Adds Coriolis"],
+        ["6", "Dropped sphere, rotating ellipsoidal Earth",
+         "Adds WGS-84 geodesy"],
+        ["7-8", "Dropped sphere, steady / varying wind",
+         "Wind shear and gust profiles"],
+        ["9-10", "Ballistic eastward / northward",
+         "Coriolis components"],
+        ["11", "F-16 subsonic trim",
+         "Trim algorithm, short-period eigenstructure"],
+        ["12", "F-16 supersonic trim",
+         "Transonic / supersonic aero, M&gt;1 trim"],
+        ["13.1-13.4", "F-16 disturbance manoeuvres",
+         "Altitude doublet, velocity step, heading step"],
+        ["15-16", "F-16 global flights",
+         "Over the North Pole, around the equator"],
+        ["17", "Two-stage rocket sea-level to orbit",
+         "Atmospheric → orbital transition"],
+    ]
+    t = Table(wrap_table(table_data),
+              colWidths=[2.0 * cm, 6.0 * cm, 8.4 * cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1d5d9b")),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.white, colors.HexColor("#f4f7fa")]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(t)
+    story.append(p(
+        "JSBSim's NASA test-case implementations live at "
+        "<font face='Courier'>github.com/open-aerospace/jsbsim-nasa-test-cases</font>; "
+        "running them is the recommended way to verify a JSBSim build "
+        "against the published reference trajectories. The F-16 short-"
+        "period and Dutch-roll eigenvalues match across simulators to the "
+        "third significant digit; trim residuals are below the per-axis "
+        "tolerances 1e-3 ft/s² and 1e-4 rad/s² that JSBSim defaults to."))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_property_tree_complete(story):
+    story.append(PageBreak())
+    heading("The Complete Property Tree", 0, story)
+    story.append(p(
+        "What follows is a near-complete enumeration of the JSBSim "
+        "property namespace, distilled from the Doxygen API reference, "
+        "the online manual, and the source-code <font face='Courier'>"
+        "PropertyManager-&gt;Tie()</font> calls in each model."))
+
+    heading("simulation/", 1, story)
+    code(
+        "simulation/sim-time-sec        cumulative simulation time\n"
+        "simulation/dt                  integration step\n"
+        "simulation/frame               tick counter\n"
+        "simulation/do_simple_trim      0=long, 1=full, 2=ground, 3=pullup,\n"
+        "                                4=custom, 5=turn, 6=none\n"
+        "simulation/do_linearization    write nonzero to dump A,B,C,D\n"
+        "simulation/trim-completed      1 after successful trim\n"
+        "simulation/reset               reset to IC\n"
+        "simulation/pause               freeze model\n"
+        "simulation/terminate           stop script\n"
+        "simulation/integrator/rate/rotational\n"
+        "simulation/integrator/rate/translational\n"
+        "simulation/integrator/position/rotational\n"
+        "simulation/integrator/position/translational\n"
+        "simulation/gravity-model       0=spherical, 1=WGS-84\n"
+        "simulation/gravitational-torque  0/1 spacecraft tidal\n"
+        "simulation/randomseed          seeds random/urandom functions\n"
+        "simulation/disperse            Monte-Carlo enable\n"
+        "forces/hold-down               hold aircraft fixed at IC")
+
+    heading("ic/", 1, story)
+    code(
+        "ic/u-fps, ic/v-fps, ic/w-fps         body-axis velocity\n"
+        "ic/vn-fps, ic/ve-fps, ic/vd-fps      NED velocity\n"
+        "ic/vt-fps, ic/vt-kts                 true airspeed\n"
+        "ic/vc-kts                            calibrated airspeed\n"
+        "ic/ve-kts                            equivalent airspeed\n"
+        "ic/vg-kts                            ground speed\n"
+        "ic/mach\n"
+        "ic/phi-deg, ic/theta-deg, ic/psi-true-deg\n"
+        "ic/alpha-deg, ic/beta-deg, ic/gamma-deg\n"
+        "ic/lat-gc-deg, ic/lat-geod-deg\n"
+        "ic/long-gc-deg\n"
+        "ic/h-sl-ft, ic/h-agl-ft, ic/terrain-elevation-ft\n"
+        "ic/vw-dir-deg, ic/vw-mag-fps\n"
+        "ic/vw-north-fps, ic/vw-east-fps, ic/vw-down-fps\n"
+        "ic/p-rad_sec, ic/q-rad_sec, ic/r-rad_sec\n"
+        "ic/roc-fpm, ic/roc-fps\n"
+        "ic/targetNlf                          load factor target")
+
+    heading("position/, attitude/", 1, story)
+    code(
+        "position/h-sl-ft, h-sl-meters\n"
+        "position/h-agl-ft\n"
+        "position/lat-gc-deg, lat-gc-rad, lat-geod-deg\n"
+        "position/long-gc-deg, long-gc-rad\n"
+        "position/radius-to-vehicle-ft\n"
+        "position/distance-from-start-lat-mt\n"
+        "position/distance-from-start-lon-mt\n"
+        "position/distance-from-start-mag-mt\n"
+        "position/terrain-elevation-asl-ft\n"
+        "position/epa-rad                       Earth position angle\n"
+        "position/eci-x-ft, eci-y-ft, eci-z-ft\n"
+        "position/ecef-x-ft, ecef-y-ft, ecef-z-ft\n"
+        "attitude/phi-rad, theta-rad, psi-rad\n"
+        "attitude/phi-deg, theta-deg, psi-deg\n"
+        "attitude/heading-true-rad\n"
+        "attitude/roll-rad, pitch-rad")
+
+    heading("velocities/", 1, story)
+    code(
+        "velocities/u-fps, v-fps, w-fps              body\n"
+        "velocities/u-aero-fps, v-aero-fps, w-aero-fps    body, airmass-rel\n"
+        "velocities/p-rad_sec, q-rad_sec, r-rad_sec       body rates\n"
+        "velocities/p-aero-rad_sec, q-aero-rad_sec, r-aero-rad_sec\n"
+        "velocities/pi-rad_sec, qi-rad_sec, ri-rad_sec    inertial rates\n"
+        "velocities/vt-fps, vt-kts\n"
+        "velocities/vc-fps, vc-kts                  calibrated\n"
+        "velocities/ve-fps, ve-kts                  equivalent\n"
+        "velocities/vg-fps                          ground\n"
+        "velocities/mach, machU\n"
+        "velocities/h-dot-fps                       climb rate\n"
+        "velocities/v-north-fps, v-east-fps, v-down-fps\n"
+        "velocities/eci-velocity-mag-fps")
+
+    heading("aero/, atmosphere/", 1, story)
+    code(
+        "aero/qbar-psf, qbarUW-psf, qbarUV-psf\n"
+        "aero/alpha-rad, alpha-deg, beta-rad, beta-deg\n"
+        "aero/alphadot-rad_sec, betadot-rad_sec\n"
+        "aero/mag-beta-rad, mag-alpha-rad\n"
+        "aero/Re                                  Reynolds number\n"
+        "aero/bi2vel, ci2vel                      b/(2V), cbar/(2V)\n"
+        "aero/alpha-wing-rad                      incidence adjusted\n"
+        "aero/h_b-cg-ft, h_b-mac-ft               ground-effect ratios\n"
+        "aero/stall-hyst-norm                     stall hysteresis\n"
+        "aero/cl-squared\n"
+        "aero/coefficient/<axis>/<name>           every defined coefficient\n"
+        "\n"
+        "atmosphere/T-R, T-sl-R, delta-T\n"
+        "atmosphere/rho-slugs_ft3, rho-sl-slugs_ft3\n"
+        "atmosphere/P-psf, P-sl-psf\n"
+        "atmosphere/a-fps, a-sl-fps\n"
+        "atmosphere/delta, theta, sigma\n"
+        "atmosphere/density-altitude, pressure-altitude\n"
+        "atmosphere/wind-north-fps, wind-east-fps, wind-down-fps\n"
+        "atmosphere/total-wind-fps, psiw-rad\n"
+        "atmosphere/turbulence/milspec/severity   0..7")
+
+    heading("forces/, moments/, accelerations/", 1, story)
+    code(
+        "forces/fbx-aero-lbs, fby-aero-lbs, fbz-aero-lbs\n"
+        "forces/fwx-aero-lbs, fwy-aero-lbs, fwz-aero-lbs   wind-axis\n"
+        "forces/fbx-prop-lbs, fby-prop-lbs, fbz-prop-lbs\n"
+        "forces/fbx-gear-lbs, fby-gear-lbs, fbz-gear-lbs\n"
+        "forces/fbx-total-lbs, fby-total-lbs, fbz-total-lbs\n"
+        "forces/hold-down\n"
+        "moments/l-aero-lbsft, m-aero-lbsft, n-aero-lbsft\n"
+        "moments/l-prop-lbsft, m-prop-lbsft, n-prop-lbsft\n"
+        "moments/l-gear-lbsft, m-gear-lbsft, n-gear-lbsft\n"
+        "moments/l-total-lbsft, m-total-lbsft, n-total-lbsft\n"
+        "accelerations/pdot-rad_sec2, qdot-rad_sec2, rdot-rad_sec2\n"
+        "accelerations/udot-ft_sec2, vdot-ft_sec2, wdot-ft_sec2\n"
+        "accelerations/Nx, Ny, Nz                load factors (g)\n"
+        "accelerations/n-pilot-x-norm, n-pilot-y-norm, n-pilot-z-norm\n"
+        "accelerations/a-pilot-x-ft_sec2, a-pilot-y, a-pilot-z\n"
+        "accelerations/gravity-ft_sec2")
+
+    heading("fcs/, gear/", 1, story)
+    code(
+        "fcs/elevator-cmd-norm, aileron-cmd-norm, rudder-cmd-norm\n"
+        "fcs/flap-cmd-norm, speedbrake-cmd-norm, spoiler-cmd-norm\n"
+        "fcs/pitch-trim-cmd-norm, roll-trim-cmd-norm, yaw-trim-cmd-norm\n"
+        "fcs/steer-cmd-norm\n"
+        "fcs/throttle-cmd-norm[n], mixture-cmd-norm[n]\n"
+        "fcs/throttle-pos-norm[n], mixture-pos-norm[n]\n"
+        "fcs/advance-cmd-norm[n], feather-cmd-norm[n]\n"
+        "fcs/magneto-cmd[n], starter-cmd[n]\n"
+        "fcs/elevator-pos-rad, -deg, -norm\n"
+        "fcs/left-aileron-pos-..., right-aileron-pos-...\n"
+        "fcs/rudder-pos-...\n"
+        "fcs/flap-pos-deg, flap-pos-norm\n"
+        "fcs/speedbrake-pos-rad, spoiler-pos-rad\n"
+        "fcs/wing-fold-pos-norm\n"
+        "fcs/left-brake-cmd-norm, right-brake-cmd-norm, center-brake-cmd-norm\n"
+        "gear/gear-cmd-norm, gear-pos-norm, tailhook-pos-norm\n"
+        "gear/unit[i]/compression-ft, WOW, wheel-speed-fps,\n"
+        "             static-friction-coeff, pos-x, pos-y, pos-z")
+
+    heading("propulsion/, inertia/, metrics/", 1, story)
+    code(
+        "propulsion/engine[i]/thrust-lbs, power-hp, rpm\n"
+        "propulsion/engine[i]/fuel-flow-rate-pps, fuel-flow-rate-gph\n"
+        "propulsion/engine[i]/n1, n2\n"
+        "propulsion/engine[i]/egt-degF, oil-pressure-psi, oil-temperature-degF\n"
+        "propulsion/engine[i]/bsfc-lbs_hphr\n"
+        "propulsion/engine[i]/mp-osi, volumetric-efficiency\n"
+        "propulsion/engine[i]/set-running                  start flag\n"
+        "propulsion/tank[i]/contents-lbs, capacity-gal_us\n"
+        "propulsion/total-fuel-lbs, refuel\n"
+        "inertia/empty-weight-lbs, weight-lbs, mass-slugs\n"
+        "inertia/cg-x-in, cg-y-in, cg-z-in\n"
+        "inertia/ixx-slugs_ft2, iyy-, izz-, ixy-, ixz-, iyz-\n"
+        "metrics/Sw-sqft, bw-ft, cbarw-ft\n"
+        "metrics/Sh-sqft, lh-ft, Sv-sqft, lv-ft\n"
+        "metrics/aero-rp-x-in, aero-rp-y-in, aero-rp-z-in")
+
+
+# ----------------------------------------------------------------------------
+def add_ext_function_language_complete(story):
+    story.append(PageBreak())
+    heading("Function Language — Complete Operator Reference", 0, story)
+    story.append(p(
+        "Every operator usable inside an <font face='Courier'>"
+        "&lt;aerodynamics&gt;</font>, <font face='Courier'>"
+        "&lt;flight_control&gt;</font>, <font face='Courier'>&lt;system&gt;"
+        "</font> or <font face='Courier'>&lt;external_reactions&gt;</font> "
+        "<font face='Courier'>&lt;function&gt;</font> block, distilled "
+        "from the Doxygen <font face='Courier'>FGFunction</font> reference. "
+        "Shortcuts: <font face='Courier'>&lt;v&gt;</font> = "
+        "<font face='Courier'>&lt;value&gt;</font>, "
+        "<font face='Courier'>&lt;p&gt;</font> = "
+        "<font face='Courier'>&lt;property&gt;</font>, "
+        "<font face='Courier'>&lt;t&gt;</font> = "
+        "<font face='Courier'>&lt;table&gt;</font>."))
+
+    table_data = [
+        ["Operator", "Description"],
+        ["sum",         "Adds all immediate children."],
+        ["difference",  "First child minus sum of remaining children."],
+        ["product",     "Multiplies all children."],
+        ["quotient",    "First child divided by second."],
+        ["pow",         "First child raised to second."],
+        ["sqrt",        "Square root."],
+        ["exp",         "e raised to child."],
+        ["ln, log2, log10", "Natural, base-2, base-10 logarithm."],
+        ["abs, sign",   "Absolute value, sign."],
+        ["sin, cos, tan", "Trig (arg in radians)."],
+        ["asin, acos, atan", "Inverse trig; result in radians."],
+        ["atan2",       "atan2(Y, X); range −π..π."],
+        ["toradians, todegrees", "Angular unit conversion."],
+        ["pi",          "Constant π. Use as <pi/>."],
+        ["lt, le, gt, ge, eq, nq",
+            "Returns 1 if relation holds else 0."],
+        ["and, or, not", "Boolean. and/or take n children."],
+        ["ifthen",      "ifthen(cond, true, false). Default false = 0."],
+        ["switch",      "switch(index, v0, v1, …); index zero-based."],
+        ["min, max, avg", "Aggregate over children."],
+        ["floor, ceil, integer, fraction",
+            "Rounding operations."],
+        ["mod, fmod, roundmultiple",
+            "Modulo, floating-point modulo, rounding to multiple."],
+        ["random",      "Gaussian; attrs seed, mean, stddev."],
+        ["urandom",     "Uniform; attrs seed, lower, upper."],
+        ["value, v",    "Literal numeric."],
+        ["property, p", "Read property (string body)."],
+        ["table, t",    "1-D, 2-D or 3-D table."],
+        ["interpolate1d", "1-D inline interpolation."],
+        ["rotation_alpha_local, rotation_beta_local, rotation_gamma_local",
+            "Specialty rotations (6 args)."],
+        ["rotation_bf_to_wf, rotation_wf_to_bf",
+            "Body↔wind rotations (7 args)."],
+    ]
+    t = Table(wrap_table(table_data),
+              colWidths=[4.4 * cm, 12.1 * cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1d5d9b")),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.white, colors.HexColor("#f4f7fa")]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(t)
+
+
+# ----------------------------------------------------------------------------
+def add_ext_verification_validation(story):
+    story.append(PageBreak())
+    heading("Verification and Validation Procedures", 0, story)
+
+    heading("V&amp;V hierarchy", 1, story)
+    for b in [
+        "<b>Verification</b>: are we solving the equations correctly? "
+        "Test against analytical solutions, against published reference "
+        "trajectories (NESC), against the simulator's own previous results "
+        "after code change.",
+        "<b>Validation</b>: are we solving the correct equations? Compare "
+        "with flight test, wind tunnel, real aircraft handbook numbers. "
+        "Validation is always against external truth.",
+        "<b>Sensitivity analysis</b>: perturb each parameter (CG, "
+        "I<sub>yy</sub>, C<sub>mα</sub>, etc.) and quantify the response "
+        "shift. Identifies the parameters most worth investing in.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Verification check list (per release)", 1, story)
+    code(
+        "1.  Build and run unit tests (CMake/CTest).\n"
+        "2.  Run NESC atmospheric cases 1-17. Compare against\n"
+        "    open-aerospace/jsbsim-nasa-test-cases reference CSVs.\n"
+        "    Acceptable error: <1e-4 in normalised state.\n"
+        "3.  Run all aircraft in aircraft/ through their reset00 IC and\n"
+        "    do_simple_trim=0. Every aircraft must trim within 60 cycles.\n"
+        "4.  For each trimmed aircraft, run a pitch doublet and check\n"
+        "    short-period damping ratio is in [0.2, 0.9]; phugoid in\n"
+        "    [0.005, 0.1].\n"
+        "5.  Run forced-oscillation about Y at +/-1 deg, k=0.05, on the\n"
+        "    F-16 cruise condition; extract C_mq + C_m_alphadot;\n"
+        "    compare to NASA-2015 reference -22.0 +/- 1.0 1/rad.")
+
+    heading("Validation against flight data", 1, story)
+    story.append(p(
+        "When flight-test data exists (Cooper-Harper-rated step responses, "
+        "stick-fixed releases, doublets), the procedure is:"))
+    for b in [
+        "Match the trim condition exactly: weight, CG, altitude, Mach, "
+        "fuel state. Document the aircraft configuration (gear, flaps, "
+        "stores).",
+        "Drive the simulator with the recorded pilot inputs (digital "
+        "stick/throttle traces).",
+        "Plot p, q, r, α, β, n<sub>z</sub>, altitude, IAS overlaid with "
+        "flight-test signals. Compute RMS error per channel.",
+        "Update aero coefficients to minimise error using least-squares "
+        "system ID — but always against a <i>held-out</i> validation "
+        "manoeuvre to avoid overfitting.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Handling qualities (MIL-F-8785C / MIL-HDBK-1797)", 1, story)
+    story.append(p(
+        "Modern HQ rating predicts Cooper-Harper pilot rating from "
+        "open-loop and closed-loop parameters. Key boundaries:"))
+    for b in [
+        "Short-period <i>ω<sub>n</sub></i> vs n/α (Category A/B/C, "
+        "Level 1/2/3 boundaries).",
+        "Phugoid damping ratio (Level 1 ζ &gt; 0.04).",
+        "Roll mode time constant τ<sub>roll</sub> (Level 1 &lt; 1 s).",
+        "Dutch roll ζ·ω<sub>n</sub> &gt; 0.15 (Level 1).",
+        "Bandwidth and dropback (modern criteria; supplements "
+        "MIL-F-8785C).",
+    ]:
+        story.append(bullet(b))
+
+
+# ----------------------------------------------------------------------------
+def add_ext_further_reading(story):
+    story.append(PageBreak())
+    heading("Further Reading and Authoritative Sources", 0, story)
+    story.append(p(
+        "The list below is the curated set of references that this manual "
+        "and the JSBSim source code itself cite most often."))
+
+    heading("Aerodynamics &amp; airfoil theory", 1, story)
+    for b in [
+        "Anderson, J. D. Jr. <i>Fundamentals of Aerodynamics</i>, 6th ed., "
+        "McGraw-Hill, 2017.",
+        "Houghton, E. L., Carpenter, P. W. <i>Aerodynamics for Engineering "
+        "Students</i>, 7th ed., Butterworth-Heinemann, 2017.",
+        "Drela, M. <i>Flight Vehicle Aerodynamics</i>, MIT Press, 2014.",
+        "McCormick, B. W. <i>Aerodynamics, Aeronautics and Flight "
+        "Mechanics</i>, 2nd ed., Wiley, 1994.",
+        "Schlichting, H. and Gersten, K. <i>Boundary-Layer Theory</i>, 9th "
+        "ed., Springer, 2017.",
+        "Abbott, I. H., von Doenhoff, A. E. <i>Theory of Wing Sections</i>, "
+        "Dover, 1959. — the NACA-airfoil reference.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Flight dynamics &amp; control", 1, story)
+    for b in [
+        "Stevens, B. L., Lewis, F. L., Johnson, E. N. <i>Aircraft Control "
+        "and Simulation</i>, 3rd ed., Wiley, 2015.",
+        "Etkin, B., Reid, L. D. <i>Dynamics of Flight: Stability and "
+        "Control</i>, 3rd ed., Wiley, 1996.",
+        "Nelson, R. C. <i>Flight Stability and Automatic Control</i>, 2nd "
+        "ed., McGraw-Hill, 1998.",
+        "Cook, M. V. <i>Flight Dynamics Principles</i>, 3rd ed., "
+        "Butterworth-Heinemann, 2012.",
+        "Roskam, J. <i>Airplane Flight Dynamics and Automatic Flight "
+        "Controls</i>, DARcorp, 2003. Roskam's eight-volume <i>Airplane "
+        "Design</i> set is the engineering bible.",
+        "USAF Stability and Control DATCOM, AFFDL-TR-79-3032 (1978). "
+        "Semi-empirical estimation methods for every derivative.",
+    ]:
+        story.append(bullet(b))
+
+    heading("CFD &amp; turbulence modelling", 1, story)
+    for b in [
+        "Wilcox, D. C. <i>Turbulence Modeling for CFD</i>, 3rd ed., "
+        "DCW Industries, 2006.",
+        "Pope, S. B. <i>Turbulent Flows</i>, Cambridge, 2000.",
+        "Hirsch, C. <i>Numerical Computation of Internal and External "
+        "Flows</i>, 2nd ed., Butterworth-Heinemann, 2007.",
+        "Spalart, P. R., Allmaras, S. R. \"A One-Equation Turbulence "
+        "Model for Aerodynamic Flows.\" AIAA 92-0439.",
+        "Menter, F. R. \"Two-Equation Eddy-Viscosity Turbulence Models "
+        "for Engineering Applications.\" AIAA Journal 32, 1994.",
+        "NASA Turbulence Modeling Resource — "
+        "turbmodels.larc.nasa.gov.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Atmosphere &amp; geodesy", 1, story)
+    for b in [
+        "NASA-TM-X-74335 / NOAA-S/T 76-1562. <i>U.S. Standard "
+        "Atmosphere, 1976.</i>",
+        "NIMA / NGA TR 8350.2. <i>Department of Defense World Geodetic "
+        "System 1984.</i>",
+        "Torge, W., Müller, J. <i>Geodesy</i>, 4th ed., de Gruyter, 2012.",
+        "Hofmann-Wellenhof, B., Lichtenegger, H., Wasle, E. <i>GNSS — "
+        "Global Navigation Satellite Systems</i>, Springer, 2008.",
+        "Vallado, D. A. <i>Fundamentals of Astrodynamics and "
+        "Applications</i>, 4th ed., Microcosm Press, 2013.",
+        "NCEI, BGS, NGA. <i>World Magnetic Model 2025 Technical "
+        "Report</i>, 2025.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Propulsion", 1, story)
+    for b in [
+        "Mattingly, J. D. <i>Aircraft Engine Design</i>, 2nd ed., "
+        "AIAA, 2002.",
+        "Hill, P. G., Peterson, C. R. <i>Mechanics and Thermodynamics of "
+        "Propulsion</i>, 2nd ed., Addison-Wesley, 1992.",
+        "Sutton, G. P., Biblarz, O. <i>Rocket Propulsion Elements</i>, "
+        "9th ed., Wiley, 2017.",
+        "Leishman, J. G. <i>Principles of Helicopter Aerodynamics</i>, "
+        "2nd ed., Cambridge, 2006.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Numerical methods", 1, story)
+    for b in [
+        "Hairer, E., Nørsett, S. P., Wanner, G. <i>Solving Ordinary "
+        "Differential Equations I</i> (non-stiff), 2nd ed., Springer, 1993.",
+        "Diebel, J. \"Representing Attitude.\" Stanford Univ. report, 2006.",
+        "Shoemake, K. \"Animating Rotation with Quaternion Curves.\" "
+        "SIGGRAPH 1985.",
+        "Buss, S. \"Accurate and Efficient Simulation of Rigid Body "
+        "Rotations.\" UCSD, 1999.",
+        "Catto, E. \"Iterative Dynamics with Temporal Coherence.\" "
+        "Crystal Dynamics tech. report, 2005.",
+    ]:
+        story.append(bullet(b))
+
+    heading("JSBSim-specific resources", 1, story)
+    for b in [
+        "Berndt, J. S. \"JSBSim: An Open Source Flight Dynamics Model in "
+        "C++.\" AIAA-2004-4923. PDF at jsbsim.sourceforge.net.",
+        "Online manual: jsbsim-team.github.io/jsbsim-reference-manual.",
+        "Doxygen API: jsbsim-team.github.io/jsbsim.",
+        "NASA NESC 6-DoF check-cases: nescacademy.nasa.gov/flightsim/2015.",
+        "JSBSim NASA test-case implementations: github.com/open-aerospace/"
+        "jsbsim-nasa-test-cases.",
+        "DeepWiki summary: deepwiki.com/JSBSim-Team/jsbsim.",
+        "FlightGear wiki (lots of practical JSBSim notes): "
+        "wiki.flightgear.org/JSBSim.",
+    ]:
+        story.append(bullet(b))
+
+
+# ============================================================================
+# Main
+# ============================================================================
 
 
 def main():
