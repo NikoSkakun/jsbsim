@@ -2358,6 +2358,20 @@ def build_story():
     add_ext_property_tree_complete(story)
     add_ext_function_language_complete(story)
     add_ext_verification_validation(story)
+    # ------------------------------------------------------------------
+    # PART III — A complete, reproducible workflow for generating an
+    # aircraft's aerodynamic dataset with OpenFOAM and importing it into
+    # a JSBSim model: meshing, static coefficients, dynamic derivatives,
+    # the XML mapping, automation, and verification.
+    # ------------------------------------------------------------------
+    add_part_iii_separator(story)
+    add_of_pipeline_overview(story)
+    add_of_geometry_meshing(story)
+    add_of_static_coeffs(story)
+    add_of_dynamic_derivatives(story)
+    add_of_xml_mapping(story)
+    add_of_automation(story)
+    add_of_verification(story)
     add_ext_further_reading(story)
     add_chapter_glossary(story)
 
@@ -6262,6 +6276,1292 @@ def add_ext_further_reading(story):
         "wiki.flightgear.org/JSBSim.",
     ]:
         story.append(bullet(b))
+
+    heading("OpenFOAM &amp; the CFD-to-FDM workflow", 1, story)
+    for b in [
+        "OpenFOAM User Guide &mdash; <i>forces</i> and <i>forceCoeffs</i> "
+        "function objects: openfoam.com/documentation/guides "
+        "(ESI) and cpp.openfoam.org (Foundation).",
+        "Greenshields, C. <i>OpenFOAM User Guide</i>, OpenCFD/CFD Direct. The "
+        "<font face='Courier'>snappyHexMesh</font>, "
+        "<font face='Courier'>simpleFoam</font> and "
+        "<font face='Courier'>pimpleFoam</font> tutorials (incl. "
+        "<font face='Courier'>RAS/wingMotion</font>) are the canonical "
+        "starting points.",
+        "Menter, F. R. \"Two-Equation Eddy-Viscosity Turbulence Models for "
+        "Engineering Applications.\" AIAA Journal 32(8), 1994 &mdash; the "
+        "k-&omega; SST model used for external aerodynamics.",
+        "Da Ronch, A., et al. \"Estimation of Dynamic Stability Derivatives "
+        "Using Computational Fluid Dynamics.\" &mdash; rotary-frame and "
+        "forced-oscillation methods.",
+        "Mi, B., et al. \"Estimation and Separation of Longitudinal Dynamic "
+        "Stability Derivatives with the Forced Oscillation Method Using CFD.\" "
+        "<i>Aerospace</i> 8(11):354, 2021 &mdash; plunging/pitching "
+        "separation of C<sub>mq</sub> and C<sub>m" + _g("α̇") + "</sub>.",
+        "Tobak, M., Schiff, L. B. \"Aerodynamic Mathematical Modeling &mdash; "
+        "Basic Concepts.\" AGARD LS-114, 1981 &mdash; indicial-response theory "
+        "behind dynamic derivatives.",
+        "NASA Turbulence Modeling Resource (turbmodels.larc.nasa.gov) and the "
+        "AIAA Drag Prediction / High-Lift Prediction Workshops &mdash; "
+        "validation cases for aircraft CFD.",
+        "Roache, P. J. \"Quantification of Uncertainty in Computational Fluid "
+        "Dynamics.\" <i>Annu. Rev. Fluid Mech.</i> 29, 1997 &mdash; the Grid "
+        "Convergence Index for mesh-independence.",
+        "PyFoam, foamlib and the JSBSim Python module &mdash; scripting the "
+        "sweep and verifying the generated model.",
+    ]:
+        story.append(bullet(b))
+
+
+# ============================================================================
+# Part III — The OpenFOAM -> JSBSim CFD workflow
+# ============================================================================
+
+
+def _g(s):
+    """Wrap a string in the DejaVu font so non-Latin-1 glyphs (Greek, dots,
+    arrows, mathematical operators) render reliably inside Helvetica prose."""
+    return f"<font name='DejaVu'>{s}</font>"
+
+
+def _oftab(data, colWidths):
+    """Build a table in the house style used throughout this manual."""
+    t = Table(wrap_table(data), colWidths=colWidths)
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0d3b66")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.white, colors.HexColor("#f4f7fa")]),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    return t
+
+
+def add_part_iii_separator(story):
+    story.append(PageBreak())
+    story.append(Spacer(1, 55 * mm))
+    story.append(Paragraph("Part III", ParagraphStyle(
+        "PartLabel3", fontName="Helvetica-Bold", fontSize=18,
+        textColor=colors.HexColor("#1d5d9b"), alignment=TA_CENTER,
+        spaceAfter=12)))
+    story.append(Paragraph(
+        "From CFD to a Flying Model:<br/>the OpenFOAM to JSBSim Workflow",
+        ParagraphStyle(
+            "PartTitle3", fontName="Helvetica-Bold", fontSize=26,
+            textColor=colors.HexColor("#0d3b66"), alignment=TA_CENTER,
+            leading=32)))
+    story.append(Spacer(1, 12 * mm))
+    story.append(Paragraph(
+        "The most demanding part of building a new aircraft is populating the "
+        "<font face='Courier'>&lt;aerodynamics&gt;</font> block with numbers "
+        "that are actually true of your airframe. Part III is an end-to-end, "
+        "reproducible recipe for generating those numbers with the open-source "
+        "CFD toolbox OpenFOAM and pouring them into JSBSim. We cover geometry "
+        "preparation and meshing, steady-state extraction of the static force "
+        "and moment coefficients, three complementary techniques for the "
+        "dynamic (rate) derivatives, the exact mapping of every coefficient "
+        "into JSBSim's function/table language, a scriptable pipeline that "
+        "automates the whole sweep, and a verification loop that closes CFD "
+        "against trim, the eigenmodes, wind-tunnel and flight data. Everything "
+        "here builds on the aerodynamics, function/table and trim machinery "
+        "documented in Parts I and II.",
+        ParagraphStyle("PartIntro3", parent=BODY_STYLE,
+                       alignment=TA_CENTER, fontSize=11, leading=15,
+                       leftIndent=22 * mm, rightIndent=22 * mm)))
+
+
+# ----------------------------------------------------------------------------
+def add_of_pipeline_overview(story):
+    A = _g("α"); B = _g("β")
+    story.append(PageBreak())
+    heading("The CFD-to-FDM Pipeline: From OpenFOAM to a JSBSim Model", 0,
+            story)
+    story.append(p(
+        "A JSBSim aerodynamic model is, at heart, a table of nondimensional "
+        "coefficients as functions of flow state (angle of attack, sideslip, "
+        "Mach, control deflections) plus a handful of dynamic derivatives that "
+        "capture the unsteady reaction to angular rates. Wind-tunnel data is "
+        "the gold standard, but for a new or modified airframe a "
+        "Reynolds-Averaged Navier-Stokes (RANS) CFD campaign in OpenFOAM is "
+        "the most accessible way to obtain a complete, self-consistent dataset "
+        "before any hardware exists. This chapter frames the whole campaign: "
+        "what JSBSim needs, how the model is decomposed, and what matrix of "
+        "CFD runs produces it."))
+
+    heading("Why build an aerodynamic model from CFD", 1, story)
+    for b in [
+        "<b>No hardware required.</b> You can characterise an airframe from a "
+        "CAD model months before a wind-tunnel slot or first flight.",
+        "<b>Full observability.</b> CFD returns the complete pressure and "
+        "shear field, so you can decompose forces by component (wing, tail, "
+        "fuselage, nacelles) exactly the way JSBSim's build-up model wants.",
+        "<b>Arbitrary conditions.</b> High angle of attack, sideslip, control "
+        "deflections, ground effect, and flight Reynolds/Mach numbers that are "
+        "hard or expensive to reproduce in a tunnel.",
+        "<b>Open and reproducible.</b> OpenFOAM is GPL, scriptable, and runs "
+        "on a laptop or an HPC cluster with identical dictionaries — a natural "
+        "match for JSBSim's open, data-driven philosophy.",
+    ]:
+        story.append(bullet(b))
+    story.append(quote(
+        "CFD does not replace the wind tunnel or flight test; it front-loads "
+        "the model so that the expensive data you do collect is spent "
+        "correcting a model rather than creating one from scratch."))
+
+    heading("What JSBSim needs: the coefficient shopping list", 1, story)
+    story.append(p(
+        "Every quantity below is a <i>nondimensional</i> coefficient. In "
+        "JSBSim each becomes one or more <font face='Courier'>&lt;function&gt;"
+        "</font> elements summed into an <font face='Courier'>&lt;axis&gt;"
+        "</font> (see the aerodynamics chapter and "
+        "<font face='Courier'>FGAerodynamics.cpp:57-69</font> for the axis "
+        "name-to-index map). The right-hand column names the CFD experiment "
+        "that yields it."))
+    data = [
+        ["Coefficient", "Physical meaning", "JSBSim axis", "CFD experiment"],
+        ["C<sub>L</sub>", "Lift vs " + A + ", flap, Mach", "LIFT (wind)",
+         "Steady RANS " + A + "-sweep"],
+        ["C<sub>D</sub>", "Drag polar vs " + A + ", Mach", "DRAG (wind)",
+         "Steady RANS " + A + "-sweep"],
+        ["C<sub>Y</sub>", "Side force vs " + B, "SIDE (wind)",
+         "Steady RANS " + B + "-sweep"],
+        ["C<sub>l</sub>", "Roll moment vs " + B + ", " + _g("δ") + "a, " +
+         _g("δ") + "r", "ROLL (body)", B + "-sweep + control runs"],
+        ["C<sub>m</sub>", "Pitch moment vs " + A + ", " + _g("δ") + "e, Mach",
+         "PITCH (body)", A + "-sweep + elevator runs"],
+        ["C<sub>n</sub>", "Yaw moment vs " + B + ", " + _g("δ") + "a, " +
+         _g("δ") + "r", "YAW (body)", B + "-sweep + control runs"],
+        ["C<sub>Lq</sub>, C<sub>mq</sub>", "Lift/pitch due to pitch rate q",
+         "LIFT, PITCH", "Forced-pitch oscillation / rotary"],
+        ["C<sub>lp</sub>, C<sub>np</sub>", "Roll/yaw due to roll rate p",
+         "ROLL, YAW", "Forced-roll oscillation / steady roll"],
+        ["C<sub>lr</sub>, C<sub>nr</sub>", "Roll/yaw due to yaw rate r",
+         "ROLL, YAW", "Forced-yaw oscillation / steady yaw"],
+        ["C<sub>L" + _g("α̇") + "</sub>, C<sub>m" + _g("α̇") + "</sub>",
+         "Lift/pitch due to " + _g("α̇") + " (downwash lag)", "LIFT, PITCH",
+         "Plunging (heave) oscillation"],
+        ["&Delta;C<sub>(...)</sub>/" + _g("δ"),
+         "Control-power increments", "respective axes",
+         "Deflected-geometry runs"],
+    ]
+    story.append(_oftab(data, [2.6 * cm, 5.0 * cm, 2.7 * cm, 6.0 * cm]))
+
+    heading("The build-up (component) model and the quasi-steady "
+            "assumption", 1, story)
+    story.append(p(
+        "JSBSim sums independent <font face='Courier'>&lt;function&gt;</font> "
+        "contributions into each axis, so the natural model is a "
+        "<i>build-up</i>: a baseline curve plus additive increments. For pitch "
+        "moment, for example:"))
+    math("C<sub>m</sub> = C<sub>m0</sub> + C<sub>m</sub>(" + _g("α") +
+         ") + C<sub>m" + _g("δ") + "e</sub>·" + _g("δ") +
+         "e + C<sub>mq</sub>·(c&#x0304;/2V)·q + C<sub>m" + _g("α̇") +
+         "</sub>·(c&#x0304;/2V)·" + _g("α̇"))
+    story.append(p(
+        "This linear superposition is exact only if the contributions are "
+        "independent. In practice the baseline curves are tabulated "
+        "nonlinearly (so stall and compressibility are captured), control and "
+        "rate terms are treated as increments about the local operating point, "
+        "and strong couplings (e.g. " + A + "-dependent control effectiveness) "
+        "are carried as 2-D tables. The <i>quasi-steady</i> assumption — that "
+        "the instantaneous force depends only on the instantaneous state plus "
+        "first-order rate terms — is what makes a finite table sufficient. It "
+        "holds for the reduced frequencies of conventional flight; it breaks "
+        "down for rapid manoeuvres, dynamic stall, and aeroelastic flutter, "
+        "which need unsteady models beyond JSBSim's table framework."))
+
+    heading("The design-of-experiments matrix", 1, story)
+    story.append(p(
+        "Plan the campaign as a structured sweep so that each CFD run maps to "
+        "a known table breakpoint. A practical baseline matrix for a "
+        "conventional aircraft:"))
+    for b in [
+        "<b>" + A + " sweep</b> at " + B + "=0: e.g. -8&deg; to +20&deg; in "
+        "2&deg; steps, finer near stall. Yields C<sub>L</sub>(" + A + "), "
+        "C<sub>D</sub>(" + A + "), C<sub>m</sub>(" + A + ").",
+        "<b>" + B + " sweep</b> at a few representative " + A + ": 0&deg; to "
+        "&plusmn;15&deg;. Yields C<sub>Y</sub>(" + B + "), C<sub>l</sub>(" +
+        B + "), C<sub>n</sub>(" + B + ") — the static lateral-directional "
+        "stability.",
+        "<b>Control runs</b>: re-mesh with each surface deflected (elevator, "
+        "aileron, rudder, flap) at 2-3 angles to get linear and saturating "
+        "increments.",
+        "<b>Mach sweep</b> (if compressible/transonic): repeat the " + A +
+        " sweep at several Mach numbers to populate the compressibility "
+        "table dimension.",
+        "<b>Dynamic runs</b>: forced-oscillation or rotary cases at one or a "
+        "few operating points to get the rate derivatives (next chapters).",
+    ]:
+        story.append(bullet(b))
+    story.append(p(
+        "A minimal conventional dataset is on the order of 20-40 static runs "
+        "plus a handful of dynamic ones; a transonic, multi-Mach, "
+        "full-control dataset can run to several hundred. Script it (see the "
+        "Automation chapter)."))
+
+    heading("Nondimensionalisation: the bridge between CFD and JSBSim", 1,
+            story)
+    story.append(p(
+        "Both worlds speak coefficients, but you must align reference "
+        "quantities or the numbers will not transfer. CFD reports "
+        "C<sub>F</sub> = F / (&frac12;" + _g("ρ") + "V&sup2; S<sub>ref</sub>) "
+        "and C<sub>M</sub> = M / (&frac12;" + _g("ρ") +
+        "V&sup2; S<sub>ref</sub> l<sub>ref</sub>). JSBSim reconstructs the "
+        "force as <i>coefficient</i> &times; <font face='Courier'>"
+        "aero/qbar-area</font> (= " + _g("q̄") + "&middot;S) and the moment "
+        "with an extra span or chord factor, where " + _g("q̄") + " = &frac12;"
+        + _g("ρ") + "V&sup2; (<font face='Courier'>FGAerodynamics.cpp:163"
+        "</font>)."))
+    story.append(p(
+        "The crucial alignment rules — get these wrong and your model is "
+        "silently mis-scaled:"))
+    for b in [
+        "<b>S<sub>ref</sub> = </b> the wing area you put in "
+        "<font face='Courier'>&lt;metrics&gt;&lt;wingarea&gt;</font> "
+        "(property <font face='Courier'>metrics/Sw-sqft</font>). Use the same "
+        "<font face='Courier'>Aref</font> in OpenFOAM's "
+        "<font face='Courier'>forceCoeffs</font>.",
+        "<b>l<sub>ref</sub> = </b> mean aerodynamic chord c&#x0304; for "
+        "pitch, span b for roll/yaw. JSBSim multiplies pitch by "
+        "<font face='Courier'>metrics/cbarw-ft</font> and roll/yaw by "
+        "<font face='Courier'>metrics/bw-ft</font>.",
+        "<b>Moment reference = </b> OpenFOAM's <font face='Courier'>CofR"
+        "</font> must equal JSBSim's <font face='Courier'>&lt;location "
+        "name=\"AERORP\"&gt;</font>, or you must transfer the moments (see the "
+        "XML-mapping chapter).",
+        "<b>Rate nondimensionalisers.</b> JSBSim forms b/(2V) as "
+        "<font face='Courier'>aero/bi2vel</font> and c&#x0304;/(2V) as "
+        "<font face='Courier'>aero/ci2vel</font> "
+        "(<font face='Courier'>FGAerodynamics.cpp:159-160, 618-619</font>); "
+        "your CFD rate derivatives must use the <i>same</i> half-chord/"
+        "half-span convention.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Roadmap of Part III", 1, story)
+    for b in [
+        "<b>Geometry &amp; meshing</b> — watertight STL, domain, "
+        "snappyHexMesh, y<sup>+</sup>, control surfaces.",
+        "<b>Static coefficients</b> — simpleFoam/rhoSimpleFoam, the "
+        "<font face='Courier'>forceCoeffs</font> function object, "
+        + A + "/" + B + " sweeps.",
+        "<b>Dynamic derivatives</b> — rotary frame, forced oscillation, "
+        "plunging, indicial; extracting C<sub>mq</sub>, C<sub>lp</sub>, "
+        "C<sub>nr</sub>, &hellip;",
+        "<b>XML mapping</b> — turning the dataset into a complete "
+        "<font face='Courier'>&lt;aerodynamics&gt;</font> block.",
+        "<b>Automation</b> — a Python driver that runs the sweep and emits "
+        "JSBSim tables.",
+        "<b>Verification</b> — trim, eigenmodes, and comparison to "
+        "tunnel/flight.",
+    ]:
+        story.append(bullet(b))
+
+
+# ----------------------------------------------------------------------------
+def add_of_geometry_meshing(story):
+    story.append(PageBreak())
+    heading("Geometry and Meshing for Aircraft in OpenFOAM", 0, story)
+    story.append(p(
+        "The mesh determines whether your coefficients are physics or "
+        "numerical noise. This chapter covers preparing watertight geometry, "
+        "sizing the domain, generating a body-fitted mesh with "
+        "<font face='Courier'>blockMesh</font> + "
+        "<font face='Courier'>snappyHexMesh</font>, hitting the right "
+        "near-wall resolution for your turbulence model, and the special "
+        "problem of deflected control surfaces."))
+
+    heading("Watertight geometry and feature extraction", 1, story)
+    story.append(p(
+        "Export the airframe as a triangulated surface (STL/OBJ) in a single, "
+        "closed, non-self-intersecting shell, with named regions ("
+        "<font face='Courier'>wing</font>, <font face='Courier'>fuselage"
+        "</font>, <font face='Courier'>elevator</font>, &hellip;) so patches "
+        "can be force-integrated separately for the component build-up. Place "
+        "the file in <font face='Courier'>constant/triSurface/</font>. Extract "
+        "sharp edges (trailing edges, control-surface gaps) so the mesher "
+        "snaps to them:"))
+    code("""\
+# constant/triSurface/ contains aircraft.stl (named solids)
+surfaceFeatureExtract       # reads system/surfaceFeatureExtractDict
+                            # -> writes aircraft.eMesh (feature edges)
+surfaceCheck aircraft.stl   # verify closed & non-degenerate""")
+    story.append(p(
+        "Keep the geometry in metres and consistent with the reference area "
+        "you will declare; OpenFOAM is unit-agnostic but your "
+        "<font face='Courier'>Aref</font>/<font face='Courier'>lRef</font> and "
+        "the JSBSim metrics must match the same physical sizes."))
+
+    heading("The computational domain", 1, story)
+    story.append(p(
+        "External-aerodynamics domains must be large enough that the farfield "
+        "boundary does not load the solution. Rules of thumb, measured from "
+        "the aircraft:"))
+    for b in [
+        "Upstream inlet: 10-20 mean chords (or &gt;5 body lengths).",
+        "Downstream outlet: 20-30 chords to let the wake develop.",
+        "Lateral/vertical farfield: 10-20 chords (or 5-10 spans).",
+        "For a symmetric case (" + _g("β") + "=0, no roll/yaw asymmetry) cut "
+        "the domain on the centre-plane with a <font face='Courier'>symmetry"
+        "</font> patch and mesh only half the aircraft — half the cells for "
+        "the same resolution.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Background mesh: blockMesh", 1, story)
+    story.append(p(
+        "<font face='Courier'>blockMesh</font> builds the rectangular "
+        "background hex grid and names the farfield patches. "
+        "<font face='Courier'>snappyHexMesh</font> then carves the aircraft "
+        "out of it. A skeleton <font face='Courier'>blockMeshDict</font>:"))
+    code("""\
+scale 1;                       // STL already in metres
+vertices ( (-60 -40 -40) (90 -40 -40) (90 40 -40) (-60 40 -40)
+           (-60 -40  40) (90 -40  40) (90 40  40) (-60 40  40) );
+blocks ( hex (0 1 2 3 4 5 6 7) (150 80 80) simpleGrading (1 1 1) );
+boundary
+(
+    inlet    { type patch;    faces ((0 4 7 3)); }
+    outlet   { type patch;    faces ((1 2 6 5)); }
+    farfield { type patch;    faces ((0 1 5 4)(3 7 6 2)(4 5 6 7)); }
+    symmetry { type symmetryPlane; faces ((0 3 2 1)); }   // y = 0 plane
+);""")
+
+    heading("Body-fitted mesh: snappyHexMesh", 1, story)
+    story.append(p(
+        "<font face='Courier'>snappyHexMesh</font> runs in three phases: "
+        "<i>castellation</i> (refine and delete cells inside the body), "
+        "<i>snapping</i> (move boundary vertices onto the STL and feature "
+        "edges), and <i>layer addition</i> (insert prismatic boundary-layer "
+        "cells). The essential dictionary knobs:"))
+    code("""\
+castellatedMeshControls
+{
+    maxLocalCells 2000000; maxGlobalCells 50000000;
+    refinementSurfaces
+    {
+        aircraft { level (5 6);      // min/max surface refinement
+                   patchInfo { type wall; } }
+    }
+    features ( { file "aircraft.eMesh"; level 6; } );  // snap to edges
+    refinementRegions
+    {
+        wakeBox { mode inside; levels ((1e15 3)); }    // refine the wake
+    }
+    locationInMesh (50 5 5);          // a point in the FLUID, not the body
+}
+snapControls { nSmoothPatch 3; tolerance 2.0; nSolveIter 50; }
+addLayersControls
+{
+    relativeSizes true;
+    layers { aircraft { nSurfaceLayers 12; } }
+    expansionRatio 1.2;
+    finalLayerThickness 0.4;          // fraction of adjacent cell
+    minThickness 0.1;
+}""")
+    story.append(p(
+        "Run <font face='Courier'>snappyHexMesh -overwrite</font>, then "
+        "<font face='Courier'>checkMesh</font>. Demand non-orthogonality "
+        "below ~65&deg;, skewness below ~4, and that the requested layers "
+        "actually grew (read the <font face='Courier'>snappyHexMesh</font> "
+        "log: \"Layer addition\" coverage near 100% on lifting surfaces)."))
+
+    heading("Near-wall resolution and y<sup>+</sup>", 1, story)
+    story.append(p(
+        "The first-cell height sets the wall coordinate y<sup>+</sup> = "
+        "u<sub>" + _g("τ") + "</sub> y / " + _g("ν") + ", and your turbulence "
+        "treatment dictates the target:"))
+    for b in [
+        "<b>Wall-resolved (low-Re) k-" + _g("ω") + " SST</b>: y<sup>+</sup> "
+        "&lt; 1 on lifting surfaces, with 30-40 cells across the boundary "
+        "layer and growth ratio &lt; 1.2. Required for trustworthy drag, "
+        "separation and stall.",
+        "<b>Wall functions</b> (high-Re): 30 &lt; y<sup>+</sup> &lt; 300. "
+        "Cheaper, acceptable for attached-flow lift and pitching moment, but "
+        "unreliable near stall and for drag breakdown.",
+    ]:
+        story.append(bullet(b))
+    story.append(p(
+        "Estimate the first-cell height from a flat-plate skin-friction "
+        "correlation: C<sub>f</sub> &asymp; 0.026/Re<sub>x</sub><sup>1/7</sup>"
+        ", wall shear " + _g("τ") + "<sub>w</sub> = &frac12;C<sub>f</sub>" +
+        _g("ρ") + "U&sup2;, friction velocity u<sub>" + _g("τ") + "</sub> = "
+        "&radic;(" + _g("τ") + "<sub>w</sub>/" + _g("ρ") + "), then "
+        "&Delta;y<sub>1</sub> = y<sup>+</sup>" + _g("ν") + "/u<sub>" + _g("τ") +
+        "</sub>. Always confirm the achieved y<sup>+</sup> from the solution "
+        "(<font face='Courier'>postProcess -func yPlus</font>) and re-mesh if "
+        "it overshoots."))
+
+    heading("Mesh independence", 1, story)
+    story.append(p(
+        "Run at least three systematically refined meshes (e.g. cell counts "
+        "in a ratio near 2) at a fixed condition and confirm C<sub>L</sub>, "
+        "C<sub>D</sub>, C<sub>m</sub> converge. Quantify with the Grid "
+        "Convergence Index (Roache) and Richardson extrapolation; report the "
+        "asymptotic value, not the finest-grid value. Drag is far more "
+        "mesh-sensitive than lift, so converge on drag."))
+
+    heading("Control surfaces and moving geometry", 1, story)
+    story.append(p(
+        "Control-power and dynamic-derivative runs need the geometry in a "
+        "deflected or moving state. Three approaches, in increasing cost:"))
+    for b in [
+        "<b>Separate static meshes</b> — model each deflection as its own STL "
+        "and mesh. Simplest and most robust for control increments; just "
+        "re-run the sweep with the deflected geometry and difference the "
+        "coefficients.",
+        "<b>Mesh morphing</b> (<font face='Courier'>displacementLaplacian"
+        "</font> / RBF) — deform a single mesh for small deflections or "
+        "oscillations; avoids re-meshing but degrades cell quality at large "
+        "motion.",
+        "<b>Overset (overlapping) or AMI sliding meshes</b> — a body-fitted "
+        "component mesh moves through a background grid. Needed for large "
+        "rotations (full-surface deflection, propellers) and for "
+        "forced-oscillation dynamic runs.",
+    ]:
+        story.append(bullet(b))
+
+
+# ----------------------------------------------------------------------------
+def add_of_static_coeffs(story):
+    A = _g("α"); B = _g("β")
+    story.append(PageBreak())
+    heading("Static Aerodynamic Coefficients from OpenFOAM", 0, story)
+    story.append(p(
+        "With a converged mesh, the static coefficients come from a series of "
+        "steady-state RANS solutions, one per flow condition, each "
+        "post-processed by the <font face='Courier'>forceCoeffs</font> "
+        "function object. This chapter pins down solver choice, boundary "
+        "conditions, how to impose angle of attack and sideslip, the exact "
+        "<font face='Courier'>forceCoeffs</font> dictionary, and how to read "
+        "off the sweep."))
+
+    heading("Solver selection", 1, story)
+    data = [
+        ["Regime", "Solver", "Notes"],
+        ["M &lt; 0.3 (incompressible)", "simpleFoam",
+         "Steady SIMPLE; density constant; fastest. Most GA/UAV work."],
+        ["0.3 &le; M &lt; 0.7", "rhoSimpleFoam",
+         "Steady compressible; captures density variation."],
+        ["Transonic (M ~ 0.7-1.2)", "rhoSimpleFoam",
+         "Compressible with shock capturing; needs finer mesh, careful "
+         "relaxation."],
+        ["Need time-accuracy", "pimpleFoam / rhoPimpleFoam",
+         "Transient; used for the dynamic-derivative runs."],
+    ]
+    story.append(_oftab(data, [4.0 * cm, 3.4 * cm, 8.8 * cm]))
+    story.append(p(
+        "For the turbulence model, <b>k-" + _g("ω") + " SST</b> (Menter) is "
+        "the workhorse for external aerodynamics: it behaves well in adverse "
+        "pressure gradients and separation and integrates to the wall when "
+        "y<sup>+</sup>&lt;1. Spalart-Allmaras is a robust one-equation "
+        "alternative for attached flow."))
+
+    heading("Boundary conditions", 1, story)
+    story.append(p(
+        "A typical incompressible setup (fields in <font face='Courier'>0/"
+        "</font>):"))
+    data = [
+        ["Patch", "U", "p", "k / " + _g("ω")],
+        ["inlet", "freestreamVelocity", "freestreamPressure /<br/>zeroGradient",
+         "fixedValue (turb. inflow)"],
+        ["outlet", "freestream / inletOutlet", "freestreamPressure",
+         "inletOutlet"],
+        ["farfield", "freestream", "freestreamPressure", "inletOutlet"],
+        ["aircraft", "noSlip", "zeroGradient",
+         "kqRWallFunction / omegaWallFunction"],
+        ["symmetry", "symmetryPlane", "symmetryPlane", "symmetryPlane"],
+    ]
+    story.append(_oftab(data, [2.4 * cm, 4.2 * cm, 4.6 * cm, 5.0 * cm]))
+    story.append(p(
+        "The <font face='Courier'>freestream</font>/"
+        "<font face='Courier'>freestreamVelocity</font> conditions switch "
+        "between inlet and outlet behaviour based on the local flux, so the "
+        "same farfield works for any flow direction — convenient for "
+        + A + "/" + B + " sweeps."))
+
+    heading("Imposing angle of attack and sideslip", 1, story)
+    story.append(p(
+        "The clean approach is to keep the mesh fixed and <b>rotate the "
+        "freestream velocity vector</b>. With body axes x aft-positive along "
+        "the fuselage, y to starboard, z up, a freestream of speed V at angle "
+        "of attack " + A + " and sideslip " + B + " is:"))
+    math("U = V&middot;( cos" + _g("α") + "&middot;cos" + _g("β") + ",  &minus;sin"
+         + _g("β") + ",  sin" + _g("α") + "&middot;cos" + _g("β") + " )")
+    code("""\
+// 0/include/freestreamConditions  (use #include in 0/U, controlDict)
+Uinf            68.0;            // m/s
+alphaDeg        5.0;
+betaDeg         0.0;
+// 0/U
+internalField   uniform (67.74 0 5.93);   // = Uinf*(cosA, 0, sinA), beta=0
+boundaryField { inlet { type freestreamVelocity;
+                        freestreamValue $internalField; } ... }""")
+    story.append(p(
+        "Crucially, the <font face='Courier'>liftDir</font> and "
+        "<font face='Courier'>dragDir</font> in "
+        "<font face='Courier'>forceCoeffs</font> must be set to the "
+        "<i>same</i> " + A + "/" + B + " so that lift is reported "
+        "perpendicular to the relative wind and drag along it. For pitch-plane "
+        "sweeps: dragDir = (cos" + _g("α") + ", 0, sin" + _g("α") +
+        "), liftDir = (&minus;sin" + _g("α") + ", 0, cos" + _g("α") + ")."))
+
+    heading("The forceCoeffs function object", 1, story)
+    story.append(p(
+        "Add this to <font face='Courier'>system/controlDict</font> under "
+        "<font face='Courier'>functions { }</font> (ESI / openfoam.com "
+        "syntax; the openfoam.org fork is nearly identical). It integrates "
+        "pressure and viscous forces over the named patches and normalises "
+        "them."))
+    code("""\
+functions
+{
+    forceCoeffs1
+    {
+        type            forceCoeffs;
+        libs            ("libforces.so");
+        writeControl    timeStep;  writeInterval 1;
+        patches         (aircraft);          // or (wing fuselage tail ...)
+        rho             rhoInf;               // incompressible: name + value
+        rhoInf          1.225;                // kg/m^3
+        magUInf         68.0;                 // m/s  (freestream speed)
+        lRef            1.40;                 // mean aerodynamic chord  [m]
+        Aref            16.17;                // reference (wing) area    [m^2]
+        // wind axes for alpha = 5 deg, beta = 0:
+        liftDir         (-0.0872 0 0.9962);
+        dragDir         ( 0.9962 0 0.0872);
+        pitchAxis       (0 1 0);
+        CofR            (1.07 0 0);           // == JSBSim AERORP, in metres
+        // optional (newer versions): which coefficients to write
+        coefficients    (Cd Cl CmPitch Cs CmRoll CmYaw);
+    }
+}""")
+    story.append(p(
+        "Outputs land in <font face='Courier'>postProcessing/forceCoeffs1/"
+        "&lt;startTime&gt;/</font> as <font face='Courier'>coefficient.dat"
+        "</font> (newer) or <font face='Courier'>forceCoeffs.dat</font> "
+        "(older), one row per write with columns including "
+        "<font face='Courier'>Cd</font> (drag), "
+        "<font face='Courier'>Cl</font> (lift), "
+        "<font face='Courier'>Cs</font> (side), and the moment coefficients "
+        "<font face='Courier'>CmRoll</font>, "
+        "<font face='Courier'>CmPitch</font>, "
+        "<font face='Courier'>CmYaw</font>. All are normalised by &frac12;"
+        + _g("ρ") + "&middot;magUInf&sup2;&middot;Aref (moments &times; lRef)."))
+    story.append(p(
+        "<b>Sign &amp; axis note.</b> OpenFOAM's moment coefficients are "
+        "about <font face='Courier'>CofR</font> in the mesh frame; JSBSim's "
+        "ROLL/PITCH/YAW are body-axis moments about the AERORP. Set "
+        "<font face='Courier'>CofR=AERORP</font> and verify the sign of each "
+        "coefficient against a known case before trusting it — a flipped axis "
+        "or a moment-reference offset is the most common error in the whole "
+        "pipeline (handled in detail in the XML-mapping chapter)."))
+
+    heading("Convergence and averaging", 1, story)
+    for b in [
+        "Run to residual stagnation (typically 1e-4 to 1e-6) <i>and</i> "
+        "coefficient plateau — monitor <font face='Courier'>coefficient.dat"
+        "</font> live, not just residuals.",
+        "Near stall or for bluff bodies the steady solver may limit-cycle; "
+        "switch to a transient solver and time-average, or average the last "
+        "few hundred SIMPLE iterations.",
+        "Use consistent under-relaxation and a couple of thousand iterations; "
+        "transonic cases need ramped Courant number / relaxation.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Running the sweeps", 1, story)
+    story.append(p(
+        "Clone the converged base case per condition, edit the freestream and "
+        "<font face='Courier'>liftDir</font>/<font face='Courier'>dragDir"
+        "</font>, run, and collect the final coefficient row. The result is "
+        "the raw material for JSBSim's tables:"))
+    for b in [
+        "<b>" + A + "-sweep</b> &rarr; C<sub>L</sub>(" + A + "), C<sub>D</sub>("
+        + A + "), C<sub>m</sub>(" + A + "). The C<sub>L</sub>-" + A + " slope "
+        "should be near 2" + _g("π") + "&middot;AR/(AR+2) per radian; "
+        "C<sub>m</sub>-" + A + " slope must be negative for static stability.",
+        "<b>" + B + "-sweep</b> &rarr; C<sub>Y</sub>(" + B + "), C<sub>l</sub>("
+        + B + ") (dihedral effect, want &lt;0), C<sub>n</sub>(" + B +
+        ") (weathercock, want &gt;0).",
+        "<b>Control runs</b> &rarr; &Delta;C per degree of "
+        "elevator/aileron/rudder/flap.",
+        "<b>Drag polar check</b> &rarr; fit C<sub>D</sub> = C<sub>D0</sub> + "
+        "C<sub>L</sub>&sup2;/(" + _g("π") + " e AR) to sanity-check zero-lift "
+        "drag and Oswald efficiency.",
+    ]:
+        story.append(bullet(b))
+
+
+# ----------------------------------------------------------------------------
+def add_of_dynamic_derivatives(story):
+    A = _g("α"); B = _g("β")
+    adot = _g("α̇")
+    story.append(PageBreak())
+    heading("Dynamic Stability Derivatives from OpenFOAM", 0, story)
+    story.append(p(
+        "Static sweeps miss the airframe's reaction to <i>angular rates</i> "
+        "and to the <i>rate of change</i> of incidence. These dynamic "
+        "(damping) derivatives — C<sub>mq</sub>, C<sub>lp</sub>, "
+        "C<sub>nr</sub>, C<sub>lr</sub>, C<sub>np</sub>, C<sub>m" + adot +
+        "</sub>, &hellip; — set the short-period, Dutch-roll, roll and spiral "
+        "behaviour. They are harder to get from CFD because they require "
+        "either a rotating reference frame or genuinely time-accurate motion. "
+        "Three methods are in common use."))
+
+    heading("The derivatives and their meaning", 1, story)
+    data = [
+        ["Derivative", "Couples", "Sign for a stable conventional aircraft"],
+        ["C<sub>mq</sub>", "pitch moment &larr; pitch rate q",
+         "&lt; 0 (pitch damping)"],
+        ["C<sub>m" + adot + "</sub>", "pitch moment &larr; " + adot +
+         " (downwash lag)", "&lt; 0"],
+        ["C<sub>Lq</sub>", "lift &larr; pitch rate q", "&gt; 0"],
+        ["C<sub>lp</sub>", "roll moment &larr; roll rate p",
+         "&lt; 0 (roll damping)"],
+        ["C<sub>nr</sub>", "yaw moment &larr; yaw rate r",
+         "&lt; 0 (yaw damping)"],
+        ["C<sub>lr</sub>", "roll moment &larr; yaw rate r", "&gt; 0"],
+        ["C<sub>np</sub>", "yaw moment &larr; roll rate p",
+         "&lt; 0 (adverse)"],
+    ]
+    story.append(_oftab(data, [2.6 * cm, 6.4 * cm, 7.2 * cm]))
+
+    heading("Nondimensional rate and reduced frequency", 1, story)
+    story.append(p(
+        "Rate derivatives are defined against nondimensional rates: q&#x0302; "
+        "= q&middot;c&#x0304;/(2V) for pitch, and p&#x0302;, r&#x0302; = "
+        "p,r&middot;b/(2V) for roll/yaw — exactly JSBSim's "
+        "<font face='Courier'>ci2vel</font> and "
+        "<font face='Courier'>bi2vel</font>. For oscillatory tests the key "
+        "similarity parameter is the <i>reduced frequency</i>:"))
+    math("k = " + _g("ω") + "&middot;c&#x0304; / (2V)")
+    story.append(p(
+        "Choose k small (~0.01-0.1) and amplitude small (1-2&deg;) so the "
+        "extracted derivatives are the quasi-steady values JSBSim's tables "
+        "expect; larger k probes genuinely unsteady aerodynamics."))
+
+    heading("Method 1: steady rotation in a non-inertial frame", 1, story)
+    story.append(p(
+        "Pure rotary derivatives (C<sub>mq</sub> without the " + adot +
+        " part, C<sub>lp</sub>, C<sub>nr</sub>) can be obtained from a "
+        "<i>steady</i> solution in a rotating reference frame, avoiding any "
+        "mesh motion. The aircraft sits in a frame turning at constant "
+        "angular velocity " + _g("Ω") + "; for a pitch-rate case the flow "
+        "follows a circular arc and the steady moment gives C<sub>mq</sub> "
+        "directly. In OpenFOAM this is set up with an MRF zone or an "
+        "<font face='Courier'>fvOptions</font> rotation source:"))
+    code("""\
+// constant/fvOptions  (impose a body rate omega about the CofR)
+rotationSource
+{
+    type            rotorDiskSource;   // or a coded/MRF source
+    // For derivative work an SRF (single rotating frame) solver
+    // (SRFSimpleFoam) with SRFProperties is the classic route:
+}
+// constant/SRFProperties
+SRFModel   rpm;
+axis       (0 1 0);          // pitch about y
+rpm        rpm_value;        // omega = q (rad/s) -> rpm""")
+    story.append(p(
+        "Run two or three rates straddling zero, plot the moment coefficient "
+        "against the nondimensional rate, and take the slope:"))
+    math("C<sub>mq</sub> = &part;C<sub>m</sub> / &part;q&#x0302;,   "
+         "q&#x0302; = q&middot;c&#x0304;/(2V)")
+    story.append(p(
+        "This is cheap (steady) and clean for the rotary part, but it does "
+        "<i>not</i> capture the " + adot + " (downwash-lag) contribution, "
+        "which needs motion."))
+
+    heading("Method 2: forced oscillation", 1, story)
+    story.append(p(
+        "Oscillate the aircraft sinusoidally about the CofR with a transient "
+        "solver (<font face='Courier'>pimpleFoam</font> + dynamic mesh) and "
+        "extract the derivatives from the phase of the moment response. The "
+        "canonical OpenFOAM primitive is "
+        "<font face='Courier'>oscillatingRotatingMotion</font> (see the "
+        "<font face='Courier'>pimpleFoam/RAS/wingMotion</font> tutorial):"))
+    code("""\
+// constant/dynamicMeshDict
+dynamicFvMesh   dynamicMotionSolverFvMesh;
+motionSolver    solidBody;
+solidBodyMotionFunction oscillatingRotatingMotion;
+oscillatingRotatingMotionCoeffs
+{
+    origin      (1.07 0 0);     // CofR == AERORP
+    axis        (0 1 0);        // pitch
+    omega       6.2832;         // angular FREQUENCY of oscillation [rad/s]
+    amplitude   (0 2 0);        // degrees about each axis (here 2 deg pitch)
+}""")
+    story.append(p(
+        "For a pure pitch oscillation about the CG with the freestream fixed, "
+        "the angle of attack and the pitch rate are locked together (q = " +
+        adot + "), so the quasi-steady moment is:"))
+    math("C<sub>m</sub>(t) = C<sub>m0</sub> + C<sub>m" + _g("α") +
+         "</sub>&middot;" + _g("α") + "(t) + (C<sub>mq</sub> + C<sub>m" + adot +
+         "</sub>)&middot;(c&#x0304;/2V)&middot;" + adot + "(t)")
+    story.append(p(
+        "With " + _g("α") + "(t) = " + _g("α") + "<sub>0</sub> + &Delta;" +
+        _g("α") + "&middot;sin(" + _g("ω") + "t), the in-phase (sine) "
+        "component of C<sub>m</sub> gives the static slope C<sub>m" + _g("α") +
+        "</sub>, and the out-of-phase (cosine) component gives the combined "
+        "damping. Extracting them as the first Fourier coefficients over one "
+        "period T:"))
+    math("C<sub>m" + _g("α") + "</sub> = (2/(&Delta;" + _g("α") +
+         "T)) &#x222B; C<sub>m</sub>(t) sin(" + _g("ω") + "t) dt")
+    math("C<sub>mq</sub> + C<sub>m" + adot + "</sub> = (2V/(c&#x0304;&middot;"
+         + _g("ω") + "&middot;&Delta;" + _g("α") + "T)) &#x222B; C<sub>m</sub>"
+         "(t) cos(" + _g("ω") + "t) dt")
+    story.append(p(
+        "Equivalently, plot C<sub>m</sub> against " + _g("α") +
+        " over a cycle: the loop's area and sense encode the damping. A "
+        "loop traversed clockwise (energy removed) means positive damping "
+        "(C<sub>mq</sub>+C<sub>m" + adot + "</sub> &lt; 0). Discard the first "
+        "1-2 cycles as startup transient and average over several clean "
+        "cycles."))
+
+    heading("Method 3: plunging and indicial response", 1, story)
+    story.append(p(
+        "Forced pitch yields only the <i>sum</i> C<sub>mq</sub> + C<sub>m" +
+        adot + "</sub>. To separate them, run a <b>plunging (heave) "
+        "oscillation</b>: translate the aircraft vertically so the angle of "
+        "attack changes (giving " + adot + ") with <i>zero</i> pitch rate "
+        "(q = 0). That isolates C<sub>m" + adot + "</sub>; subtract it from "
+        "the forced-pitch sum to recover C<sub>mq</sub>:"))
+    math("C<sub>mq</sub> = (C<sub>mq</sub> + C<sub>m" + adot +
+         "</sub>)<sub>pitch</sub> &minus; (C<sub>m" + adot +
+         "</sub>)<sub>plunge</sub>")
+    story.append(p(
+        "The <b>indicial (step) method</b> is the third route: impose a step "
+        "in " + _g("α") + " or q and record the moment's transient build-up; "
+        "the derivatives follow from the indicial response functions "
+        "(Tobak/Wagner theory). It is the most general but the most "
+        "demanding to post-process."))
+
+    heading("Lateral-directional derivatives", 1, story)
+    story.append(p(
+        "The same machinery applies to roll and yaw. Forced-roll oscillation "
+        "about the body x-axis gives C<sub>lp</sub> (and C<sub>np</sub>); "
+        "forced-yaw oscillation about z gives C<sub>nr</sub> (and "
+        "C<sub>lr</sub>). The nondimensionaliser switches from c&#x0304;/(2V) "
+        "to b/(2V) (JSBSim's <font face='Courier'>bi2vel</font>). Steady "
+        "rotation in a non-inertial frame is again the cheap route for the "
+        "pure rate parts."))
+
+    heading("Method comparison", 1, story)
+    data = [
+        ["Method", "Gets", "Cost", "Caveat"],
+        ["Steady rotary frame", "pure C<sub>mq</sub>, C<sub>lp</sub>, "
+         "C<sub>nr</sub>", "low (steady)", "misses " + adot + " lag"],
+        ["Forced oscillation", "C<sub>mq</sub>+C<sub>m" + adot + "</sub> etc.",
+         "high (transient + moving mesh)", "needs Fourier separation"],
+        ["Plunging", "C<sub>m" + adot + "</sub> alone",
+         "high", "pairs with forced pitch"],
+        ["Indicial / step", "all, most general",
+         "high", "complex post-processing"],
+    ]
+    story.append(_oftab(data, [3.6 * cm, 5.0 * cm, 4.0 * cm, 3.6 * cm]))
+    story.append(quote(
+        "Pragmatic recipe: use the steady rotary frame for the bulk of the "
+        "rotary derivatives, add one forced-pitch + one plunging case to pin "
+        "down C<sub>mq</sub> vs C<sub>m" + adot + "</sub>, and fall back on "
+        "DATCOM/AVL estimates for any derivative the budget can't cover."))
+
+
+# ----------------------------------------------------------------------------
+def add_of_xml_mapping(story):
+    A = _g("α"); B = _g("β")
+    story.append(PageBreak())
+    heading("Reducing CFD Data into the JSBSim Aircraft XML", 0, story)
+    story.append(p(
+        "This is where the campaign pays off: turning the CFD dataset into a "
+        "complete <font face='Courier'>&lt;aerodynamics&gt;</font> block. The "
+        "good news is that JSBSim's framework maps almost one-to-one onto "
+        "nondimensional coefficients — a derivative value drops straight into "
+        "a <font face='Courier'>&lt;value&gt;</font>, and a coefficient curve "
+        "drops straight into a <font face='Courier'>&lt;table&gt;</font>."))
+
+    heading("Choosing the axis system and reference point", 1, story)
+    story.append(p(
+        "Match JSBSim's axes to what CFD naturally reports. Forces from "
+        "<font face='Courier'>forceCoeffs</font> are lift/drag/side (wind "
+        "axes); moments are body-axis roll/pitch/yaw. So:"))
+    for b in [
+        "Forces &rarr; <font face='Courier'>&lt;axis name=\"LIFT\"&gt;</font>, "
+        "<font face='Courier'>\"DRAG\"</font>, <font face='Courier'>\"SIDE\""
+        "</font> (wind frame is the default when LIFT/DRAG are used; "
+        "<font face='Courier'>FGAerodynamics.cpp:453-460</font>).",
+        "Moments &rarr; <font face='Courier'>&lt;axis name=\"ROLL\"&gt;</font>,"
+        " <font face='Courier'>\"PITCH\"</font>, <font face='Courier'>\"YAW\""
+        "</font> (body frame by default; "
+        "<font face='Courier'>FGAerodynamics.cpp:450-452</font>).",
+        "Set OpenFOAM's <font face='Courier'>CofR</font> equal to the "
+        "<font face='Courier'>&lt;metrics&gt;&lt;location name=\"AERORP\"&gt;"
+        "</font> so the moment reference matches; otherwise transfer the "
+        "moments (below).",
+    ]:
+        story.append(bullet(b))
+
+    heading("The master mapping table", 1, story)
+    story.append(p(
+        "Each CFD coefficient becomes a <font face='Courier'>&lt;function&gt;"
+        "</font> = (nondimensionalisers) &times; (coefficient). The "
+        "nondimensionalisers are JSBSim properties; the coefficient is your "
+        "CFD <font face='Courier'>&lt;table&gt;</font> or "
+        "<font face='Courier'>&lt;value&gt;</font>."))
+    qa = "<font face='Courier'>aero/qbar-area</font>"
+    data = [
+        ["Coefficient", "Axis", "JSBSim function = product of"],
+        ["C<sub>L</sub>(" + A + ")", "LIFT",
+         qa + " &times; table C<sub>L</sub>(" + A + ")"],
+        ["C<sub>D</sub>(" + A + ")", "DRAG",
+         qa + " &times; table C<sub>D</sub>(" + A + ")"],
+        ["C<sub>Y</sub>(" + B + ")", "SIDE",
+         qa + " &times; table C<sub>Y</sub>(" + B + ")"],
+        ["C<sub>l</sub>(" + B + ")", "ROLL",
+         qa + " &times; <font face='Courier'>bw-ft</font> &times; table"],
+        ["C<sub>m</sub>(" + A + ")", "PITCH",
+         qa + " &times; <font face='Courier'>cbarw-ft</font> &times; table"],
+        ["C<sub>n</sub>(" + B + ")", "YAW",
+         qa + " &times; <font face='Courier'>bw-ft</font> &times; table"],
+        ["C<sub>mq</sub>", "PITCH",
+         qa + " &times; <font face='Courier'>cbarw-ft</font> &times; "
+         "<font face='Courier'>ci2vel</font> &times; "
+         "<font face='Courier'>q-aero-rad_sec</font> &times; value"],
+        ["C<sub>lp</sub>", "ROLL",
+         qa + " &times; <font face='Courier'>bw-ft</font> &times; "
+         "<font face='Courier'>bi2vel</font> &times; "
+         "<font face='Courier'>p-aero-rad_sec</font> &times; value"],
+        ["C<sub>nr</sub>", "YAW",
+         qa + " &times; <font face='Courier'>bw-ft</font> &times; "
+         "<font face='Courier'>bi2vel</font> &times; "
+         "<font face='Courier'>r-aero-rad_sec</font> &times; value"],
+    ]
+    story.append(_oftab(data, [2.4 * cm, 1.8 * cm, 12.0 * cm]))
+
+    heading("The key insight: the value IS the derivative", 1, story)
+    story.append(p(
+        "Because JSBSim builds the nondimensional rate internally (b/2V and "
+        "c&#x0304;/2V via <font face='Courier'>bi2vel</font>/"
+        "<font face='Courier'>ci2vel</font>, "
+        "<font face='Courier'>FGAerodynamics.cpp:159-160</font>) and "
+        "re-dimensionalises with " + _g("q̄") + "&middot;S and span/chord, the "
+        "constant you place in the rate-derivative <font face='Courier'>"
+        "&lt;value&gt;</font> is exactly the textbook nondimensional "
+        "derivative. The c172 model makes this concrete — its roll-damping "
+        "function is literally " + _g("q̄") + "S&middot;b&middot;(b/2V)"
+        "&middot;p&middot;C<sub>lp</sub> with C<sub>lp</sub> = &minus;0.47 "
+        "(<font face='Courier'>aircraft/c172x/c172x.xml:1025-1034</font>):"))
+    code("""\
+<function name="aero/coefficient/Clp">
+  <description>Roll moment due to roll rate (roll damping)</description>
+  <product>
+    <property>aero/qbar-area</property>       <!-- qbar * Sw          -->
+    <property>metrics/bw-ft</property>         <!-- span b             -->
+    <property>aero/bi2vel</property>           <!-- b/(2V)             -->
+    <property>velocities/p-aero-rad_sec</property> <!-- roll rate p    -->
+    <value>-0.47</value>                       <!-- Clp from CFD       -->
+  </product>
+</function>""")
+    story.append(p(
+        "So your OpenFOAM-derived C<sub>lp</sub>, C<sub>mq</sub>, "
+        "C<sub>nr</sub>, &hellip; go directly into the "
+        "<font face='Courier'>&lt;value&gt;</font> slot. No further scaling."))
+
+    heading("Static curves as tables", 1, story)
+    story.append(p(
+        "Tabulate each baseline coefficient against its primary variable, "
+        "adding column/table dimensions for couplings (e.g. " + B + ", Mach, "
+        "flap). The lift curve from an " + A + "-sweep, multiplied up to a "
+        "force:"))
+    code("""\
+<axis name="LIFT">
+  <function name="aero/coefficient/CL_basic">
+    <description>Lift from CFD alpha-sweep</description>
+    <product>
+      <property>aero/qbar-area</property>
+      <table>
+        <independentVar lookup="row">aero/alpha-rad</independentVar>
+        <tableData>
+          -0.140  -0.62
+          -0.087  -0.18
+           0.000   0.27
+           0.087   0.95
+           0.175   1.42
+           0.262   1.61   <!-- approaching stall -->
+           0.300   1.45   <!-- post-stall drop  -->
+        </tableData>
+      </table>
+    </product>
+  </function>
+</axis>""")
+    story.append(p(
+        "For a Mach-dependent dataset, add "
+        "<font face='Courier'>&lt;independentVar lookup=\"column\"&gt;"
+        "velocities/mach&lt;/independentVar&gt;</font> and supply a matrix; "
+        "for " + A + "/" + B + "/Mach add a "
+        "<font face='Courier'>lookup=\"table\"</font> third dimension with "
+        "<font face='Courier'>&lt;tableData breakPoint=\"&hellip;\"&gt;"
+        "</font> blocks."))
+
+    heading("Control increments", 1, story)
+    story.append(p(
+        "Differencing a deflected-geometry run against the clean baseline "
+        "gives &Delta;C per surface; tabulate against deflection so "
+        "nonlinearity/saturation is captured:"))
+    code("""\
+<function name="aero/coefficient/Cm_de">
+  <description>Pitch moment due to elevator (CFD increments)</description>
+  <product>
+    <property>aero/qbar-area</property>
+    <property>metrics/cbarw-ft</property>
+    <table>
+      <independentVar lookup="row">fcs/elevator-pos-rad</independentVar>
+      <tableData>
+        -0.35  0.38
+         0.00  0.00
+         0.35 -0.41
+      </tableData>
+    </table>
+  </product>
+</function>""")
+
+    heading("Sign and axis conventions: the pitfalls", 1, story)
+    story.append(p(
+        "Most failures here are bookkeeping, not physics. Reconcile these "
+        "before trusting the model:"))
+    for b in [
+        "<b>Drag sign.</b> CFD C<sub>D</sub> is positive (force opposing the "
+        "wind). JSBSim's DRAG axis already points along the relative wind, so "
+        "a positive value is correct drag — do not negate.",
+        "<b>Body-axis directions.</b> Confirm your CFD body frame (x, y, z "
+        "senses) matches JSBSim's structural-to-body convention; a flipped y "
+        "or z silently inverts roll/yaw or pitch.",
+        "<b>Moment reference transfer.</b> If <font face='Courier'>CofR &ne; "
+        "AERORP</font>, shift the pitching moment. With normal force "
+        "C<sub>N</sub>, axial force C<sub>A</sub>, and the AERORP a distance "
+        "&Delta;x aft and &Delta;z above the CofR:",
+    ]:
+        story.append(bullet(b))
+    math("C<sub>m,AERORP</sub> = C<sub>m,CofR</sub> + "
+         "(C<sub>N</sub>&middot;&Delta;x &minus; C<sub>A</sub>&middot;&Delta;z)"
+         " / c&#x0304;")
+    for b in [
+        "<b>Radians vs degrees.</b> Table independent variables use the "
+        "property's native unit — <font face='Courier'>aero/alpha-rad</font> "
+        "is radians, <font face='Courier'>aero/alpha-deg</font> degrees, "
+        "<font face='Courier'>fcs/elevator-pos-rad</font> radians. Match your "
+        "CFD breakpoints to the property you reference.",
+        "<b>Reference area/length consistency.</b> The S, b, c&#x0304; in "
+        "<font face='Courier'>&lt;metrics&gt;</font> must equal the "
+        "<font face='Courier'>Aref</font>/<font face='Courier'>lRef</font> "
+        "used in <font face='Courier'>forceCoeffs</font>.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Worked example: a complete CFD-derived axis set", 1, story)
+    story.append(p(
+        "Putting it together — a compact but complete "
+        "<font face='Courier'>&lt;aerodynamics&gt;</font> skeleton populated "
+        "entirely from CFD (baseline curves abbreviated):"))
+    code("""\
+<aerodynamics>
+  <axis name="DRAG">
+    <function name="aero/coefficient/CD0">          <!-- CD vs alpha -->
+      <product><property>aero/qbar-area</property>
+        <table><independentVar lookup="row">aero/alpha-rad</independentVar>
+          <tableData> -0.09 0.025
+                       0.00 0.022
+                       0.17 0.060
+                       0.26 0.140 </tableData></table>
+      </product>
+    </function>
+  </axis>
+  <axis name="LIFT">
+    <function name="aero/coefficient/CLa">          <!-- CL vs alpha -->
+      <product><property>aero/qbar-area</property>
+        <table><independentVar lookup="row">aero/alpha-rad</independentVar>
+          <tableData> -0.09 -0.18
+                       0.00  0.27
+                       0.17  1.42
+                       0.26  1.61 </tableData></table>
+      </product>
+    </function>
+    <function name="aero/coefficient/CLq">          <!-- lift due to q -->
+      <product><property>aero/qbar-area</property>
+        <property>aero/ci2vel</property>
+        <property>velocities/q-aero-rad_sec</property>
+        <value>3.9</value></product>
+    </function>
+  </axis>
+  <axis name="SIDE">
+    <function name="aero/coefficient/CYb">          <!-- side force vs beta -->
+      <product><property>aero/qbar-area</property>
+        <property>aero/beta-rad</property><value>-0.31</value></product>
+    </function>
+  </axis>
+  <axis name="ROLL">
+    <function name="aero/coefficient/Clb">          <!-- dihedral effect -->
+      <product><property>aero/qbar-area</property><property>metrics/bw-ft</property>
+        <property>aero/beta-rad</property><value>-0.089</value></product>
+    </function>
+    <function name="aero/coefficient/Clp">          <!-- roll damping -->
+      <product><property>aero/qbar-area</property><property>metrics/bw-ft</property>
+        <property>aero/bi2vel</property>
+        <property>velocities/p-aero-rad_sec</property>
+        <value>-0.47</value></product>
+    </function>
+  </axis>
+  <axis name="PITCH">
+    <function name="aero/coefficient/Cma">          <!-- pitch stiffness -->
+      <product><property>aero/qbar-area</property><property>metrics/cbarw-ft</property>
+        <property>aero/alpha-rad</property><value>-1.8</value></product>
+    </function>
+    <function name="aero/coefficient/Cmq">          <!-- pitch damping -->
+      <product><property>aero/qbar-area</property><property>metrics/cbarw-ft</property>
+        <property>aero/ci2vel</property>
+        <property>velocities/q-aero-rad_sec</property>
+        <value>-12.4</value></product>
+    </function>
+  </axis>
+  <axis name="YAW">
+    <function name="aero/coefficient/Cnb">          <!-- weathercock -->
+      <product><property>aero/qbar-area</property><property>metrics/bw-ft</property>
+        <property>aero/beta-rad</property><value>0.065</value></product>
+    </function>
+    <function name="aero/coefficient/Cnr">          <!-- yaw damping -->
+      <product><property>aero/qbar-area</property><property>metrics/bw-ft</property>
+        <property>aero/bi2vel</property>
+        <property>velocities/r-aero-rad_sec</property>
+        <value>-0.15</value></product>
+    </function>
+  </axis>
+</aerodynamics>""")
+    story.append(p(
+        "Every <font face='Courier'>&lt;value&gt;</font> above is a "
+        "nondimensional stability derivative straight from CFD; every "
+        "<font face='Courier'>&lt;table&gt;</font> is a CFD sweep. Add control "
+        "increments, ground effect and Mach dimensions as the data warrants."))
+
+
+# ----------------------------------------------------------------------------
+def add_of_automation(story):
+    story.append(PageBreak())
+    heading("Automating the OpenFOAM-to-JSBSim Pipeline", 0, story)
+    story.append(p(
+        "A real campaign is dozens to hundreds of runs; doing it by hand is "
+        "error-prone and unreproducible. This chapter sketches a scriptable "
+        "pipeline: template a base case over the condition matrix, run the "
+        "solver, parse <font face='Courier'>coefficient.dat</font>, and emit "
+        "JSBSim <font face='Courier'>&lt;function&gt;</font>/"
+        "<font face='Courier'>&lt;table&gt;</font> XML."))
+
+    heading("Case templating over the condition matrix", 1, story)
+    story.append(p(
+        "Keep one converged <font face='Courier'>baseCase/</font> and clone "
+        "it per condition, rewriting only the freestream and "
+        "<font face='Courier'>liftDir</font>/<font face='Courier'>dragDir"
+        "</font>. A minimal Python driver:"))
+    code('''\
+import math, shutil, subprocess, pathlib, re
+
+def wind_dirs(alpha_deg, beta_deg=0.0):
+    a, b = math.radians(alpha_deg), math.radians(beta_deg)
+    drag = (math.cos(a)*math.cos(b), -math.sin(b), math.sin(a)*math.cos(b))
+    lift = (-math.sin(a), 0.0, math.cos(a))
+    return drag, lift
+
+def make_case(alpha, Uinf=68.0, base="baseCase"):
+    case = pathlib.Path(f"run_a{alpha:+05.1f}")
+    if case.exists(): shutil.rmtree(case)
+    shutil.copytree(base, case)
+    drag, lift = wind_dirs(alpha)
+    U = (Uinf*math.cos(math.radians(alpha)), 0.0,
+         Uinf*math.sin(math.radians(alpha)))
+    # patch 0/U internalField and forceCoeffs liftDir/dragDir
+    sub(case/"0"/"U", r"internalField\\s+uniform \\([^)]*\\)",
+        f"internalField   uniform ({U[0]:.4f} {U[1]:.4f} {U[2]:.4f})")
+    fc = case/"system"/"controlDict"
+    sub(fc, r"liftDir\\s+\\([^)]*\\)", f"liftDir ({lift[0]:.4f} {lift[1]:.4f} {lift[2]:.4f})")
+    sub(fc, r"dragDir\\s+\\([^)]*\\)", f"dragDir ({drag[0]:.4f} {drag[1]:.4f} {drag[2]:.4f})")
+    return case
+
+def sub(path, pattern, repl):
+    t = path.read_text()
+    path.write_text(re.sub(pattern, repl, t))
+
+for alpha in range(-8, 22, 2):
+    case = make_case(alpha)
+    subprocess.run(["simpleFoam", "-case", str(case)], check=True)''')
+
+    heading("Parsing the coefficients", 1, story)
+    story.append(p(
+        "Read the last row of <font face='Courier'>coefficient.dat</font> "
+        "(skipping the <font face='Courier'>#</font> header) for each case:"))
+    code('''\
+import numpy as np, glob, os
+
+def last_coeffs(case):
+    f = sorted(glob.glob(f"{case}/postProcessing/forceCoeffs1/*/coefficient.dat"))[-1]
+    rows = [l for l in open(f) if not l.startswith("#")]
+    cols = np.array(rows[-1].split(), dtype=float)
+    # column order (ESI): time Cd Cs Cl CmRoll CmPitch CmYaw ...
+    return dict(Cd=cols[1], Cs=cols[2], Cl=cols[3],
+                Cl_roll=cols[4], Cm=cols[5], Cn=cols[6])
+
+data = {}
+for case in sorted(glob.glob("run_a*")):
+    alpha = float(case.split("_a")[1])
+    data[alpha] = last_coeffs(case)''')
+
+    heading("Emitting JSBSim tables", 1, story)
+    story.append(p(
+        "Finally, format the parsed sweep as a JSBSim "
+        "<font face='Courier'>&lt;function&gt;</font> with a "
+        "<font face='Courier'>&lt;table&gt;</font>. Note the conversion of "
+        "the " + _g("α") + " breakpoints to radians to match "
+        "<font face='Courier'>aero/alpha-rad</font>:"))
+    code('''\
+def emit_lift(data):
+    rows = "\\n".join(f"      {math.radians(a):8.4f} {data[a]['Cl']:8.4f}"
+                      for a in sorted(data))
+    return f"""<function name="aero/coefficient/CL_cfd">
+  <description>Lift from OpenFOAM alpha-sweep</description>
+  <product>
+    <property>aero/qbar-area</property>
+    <table>
+      <independentVar lookup="row">aero/alpha-rad</independentVar>
+      <tableData>
+{rows}
+      </tableData>
+    </table>
+  </product>
+</function>"""
+
+print(emit_lift(data))   # paste into <axis name="LIFT"> ... </axis>''')
+
+    heading("Tooling and reproducibility", 1, story)
+    for b in [
+        "<b>PyFoam</b>, <b>foamlib</b> and <b>openfoamparser</b> read/write "
+        "OpenFOAM dictionaries and post-processing files robustly — prefer "
+        "them over regex for production pipelines.",
+        "<b>pandas</b>/<b>numpy</b> for sweep storage, polar fitting "
+        "(C<sub>D0</sub>, Oswald e), and slope estimation "
+        "(C<sub>L" + _g("α") + "</sub>, C<sub>m" + _g("α") + "</sub>).",
+        "The <b>JSBSim Python module</b> (<font face='Courier'>import jsbsim"
+        "</font>) lets the same script trim and exercise the generated model "
+        "for immediate verification.",
+        "Keep an <font face='Courier'>Allrun</font>/<font face='Courier'>"
+        "Allclean</font>, pin the OpenFOAM version, and archive logs and "
+        "<font face='Courier'>checkMesh</font> output so the dataset is "
+        "auditable and re-runnable.",
+    ]:
+        story.append(bullet(b))
+
+
+# ----------------------------------------------------------------------------
+def add_of_verification(story):
+    story.append(PageBreak())
+    heading("Verification: Closing the CFD-JSBSim-Flight Loop", 0, story)
+    story.append(p(
+        "A model that loads without error is not a validated model. The last "
+        "step is to confirm the JSBSim aircraft reproduces the CFD physics, "
+        "behaves sensibly in trim and in its dynamic modes, and — where data "
+        "exists — agrees with wind tunnel and flight. Treat it as a loop: each "
+        "discrepancy points back to a specific table, sign or reference."))
+
+    heading("Static checks: does it trim where CFD says it should", 1, story)
+    for b in [
+        "Trim the model (<font face='Courier'>FGTrim</font>, longitudinal "
+        "mode) and confirm the trim " + _g("α") + " and elevator are physical "
+        "and match the CFD operating point.",
+        "Recover C<sub>m</sub>(" + _g("α") + ") from JSBSim by sweeping " +
+        _g("α") + " with controls fixed and reading "
+        "<font face='Courier'>aero/coefficient/*</font> or "
+        "<font face='Courier'>moments/m-aero-lbsft</font>; the slope must "
+        "match the CFD C<sub>m" + _g("α") + "</sub>.",
+        "Locate the <b>neutral point</b> (where dC<sub>m</sub>/dC<sub>L</sub> "
+        "= 0) and confirm the <b>static margin</b> (NP minus CG, in % MAC) is "
+        "positive and consistent with the CFD-derived value.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Dynamic checks: linearise and compare the modes", 1, story)
+    story.append(p(
+        "Trim, apply small perturbations (or use a linearisation utility) and "
+        "extract the eigenvalues, then compare against the analytic modes that "
+        "the derivatives predict (see the eigenmodes chapter):"))
+    for b in [
+        "<b>Short-period</b> frequency/damping driven by C<sub>m" +
+        _g("α") + "</sub> and C<sub>mq</sub>+C<sub>m" + _g("α̇") + "</sub> — a "
+        "direct check on the pitch-damping derivative you extracted.",
+        "<b>Phugoid</b> — low frequency, lightly damped; sensitive to drag and "
+        "lift, hence to the static polar.",
+        "<b>Dutch roll</b> from C<sub>n" + _g("β") + "</sub>, C<sub>nr</sub>, "
+        "C<sub>l" + _g("β") + "</sub>; <b>roll subsidence</b> from "
+        "C<sub>lp</sub>; <b>spiral</b> from C<sub>l" + _g("β") + "</sub>, "
+        "C<sub>nr</sub>, C<sub>lr</sub>, C<sub>n" + _g("β") + "</sub>.",
+        "A mode that is unstable when it should not be, or an order-of-"
+        "magnitude-wrong frequency, almost always traces to a wrong sign or "
+        "missing rate derivative.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Comparison against independent data", 1, story)
+    story.append(p(
+        "Rank your confidence: flight test &gt; wind tunnel &gt; high-fidelity "
+        "CFD &gt; panel/VLM (AVL, XFLR5) &gt; empirical (DATCOM). Use the "
+        "cheaper methods to bracket the CFD and the expensive data to correct "
+        "it:"))
+    for b in [
+        "Cross-check C<sub>L" + _g("α") + "</sub>, C<sub>m" + _g("α") +
+        "</sub>, C<sub>l" + _g("β") + "</sub>, C<sub>nr</sub>, &hellip; "
+        "against AVL (vortex-lattice) and USAF DATCOM estimates — they should "
+        "agree in sign and rough magnitude.",
+        "Where wind-tunnel or flight data exists, tune the CFD-derived tables "
+        "to match (Reynolds and trim-state corrections first).",
+        "Blend sources explicitly: e.g. CFD for the nonlinear high-" +
+        _g("α") + " lift, AVL for the linear derivatives, DATCOM for a "
+        "derivative no run covered. Document the provenance of each number.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Extrapolation cautions", 1, story)
+    for b in [
+        "<b>Reynolds number.</b> Run CFD at flight Re; sub-scale Re shifts "
+        "C<sub>D0</sub>, maximum lift and stall " + _g("α") + ".",
+        "<b>Mach.</b> Incompressible coefficients are invalid past M~0.3-0.5; "
+        "add a Mach table dimension for fast aircraft.",
+        "<b>Beyond the data.</b> JSBSim extends tables by holding the end "
+        "value flat (no extrapolation); ensure your tables span the full "
+        "intended envelope, especially post-stall and large sideslip.",
+        "<b>Rigid-body only.</b> CFD-on-CAD ignores aeroelastic deformation "
+        "and unsteady/separated effects beyond the quasi-steady model.",
+    ]:
+        story.append(bullet(b))
+
+    heading("The iteration loop", 1, story)
+    story.append(p(
+        "Verification is rarely one pass. The healthy workflow is: build "
+        "tables from CFD &rarr; trim &rarr; check modes &rarr; compare to "
+        "reference data &rarr; identify the worst discrepancy &rarr; add or "
+        "correct the responsible CFD run or table &rarr; repeat. Because every "
+        "coefficient is an isolated, observable "
+        "<font face='Courier'>&lt;function&gt;</font> in the property tree, "
+        "JSBSim makes this loop fast: you can watch each contribution "
+        "live and pinpoint exactly which term is wrong."))
+    story.append(quote(
+        "A flight model is never finished, only progressively less wrong. CFD "
+        "gets you a credible first model; trim, the eigenmodes, and real data "
+        "tell you where to spend the next run."))
 
 
 # ============================================================================
