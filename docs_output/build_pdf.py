@@ -2372,6 +2372,29 @@ def build_story():
     add_of_xml_mapping(story)
     add_of_automation(story)
     add_of_verification(story)
+    # ------------------------------------------------------------------
+    # PART IV — The practitioner's half: where aerodynamic data comes
+    # from and how to blend it, how every subsystem (mass, propulsion,
+    # gear, FCS, autopilot, sensors) is built and tuned, how stall/spin
+    # are captured, how to script tests, and how to match performance
+    # and handling qualities. Distilled from the source, the reference
+    # manual, the FlightGear wiki and the developer forums.
+    # ------------------------------------------------------------------
+    add_part_iv_separator(story)
+    add_fdm_data_sources(story)
+    add_fdm_aeromatic(story)
+    add_fdm_mass_balance(story)
+    add_fdm_propulsion_practice(story)
+    add_fdm_propellers(story)
+    add_fdm_gear(story)
+    add_fdm_fcs(story)
+    add_fdm_autopilot(story)
+    add_fdm_sensors_systems(story)
+    add_fdm_high_alpha(story)
+    add_fdm_scripting(story)
+    add_fdm_performance_hq(story)
+    add_fdm_integration(story)
+    add_fdm_checklist(story)
     add_ext_further_reading(story)
     add_chapter_glossary(story)
 
@@ -6312,6 +6335,40 @@ def add_ext_further_reading(story):
     ]:
         story.append(bullet(b))
 
+    heading("FDM building, data sources, and validation", 1, story)
+    for b in [
+        "Berndt, J. S. \"JSBSim: An Open Source Flight Dynamics Model in "
+        "C++.\" AIAA 2004-4923 &mdash; the canonical paper on the engine.",
+        "Berndt, J. S., De Marco, A. \"Progress on and Usage of the Open "
+        "Source Flight Dynamics Model Software Library, JSBSim.\" "
+        "AIAA 2009-5699.",
+        "<i>JSBSim Reference Manual</i> (jsbsim.sourceforge.net/"
+        "JSBSimReferenceManual.pdf) and the online manual at "
+        "jsbsim-team.github.io/jsbsim-reference-manual.",
+        "FlightGear wiki: <i>JSBSim</i>, <i>JSBSim Aerodynamics</i>, "
+        "<i>JSBSim Engines</i>, <i>JSBSim Thrusters</i>, "
+        "<i>JSBSim GroundReactions</i> &mdash; the practical community "
+        "knowledge base.",
+        "&quot;A Journal for the Creation and Refinement of a JSBSim Aircraft "
+        "Flight Model&quot; &mdash; a worked, narrated model-building diary.",
+        "Aeromatic / aeromatic++ (jsbsim.sourceforge.net/aeromatic2.html; "
+        "source in <font face='Courier'>utils/aeromatic++/</font>).",
+        "USAF Stability and Control DATCOM, AFFDL-TR-79-3032; Digital DATCOM "
+        "(holycows.net/datcom) with XML export for JSBSim.",
+        "Drela, M., Youngren, H. <i>AVL</i> (vortex lattice); <i>XFLR5</i>; "
+        "OpenVSP / <i>VSPAero</i> &mdash; preliminary aero and derivatives.",
+        "Roskam, J. <i>Airplane Design</i> (Part V: component weights and "
+        "moments of inertia) &mdash; radii of gyration by class.",
+        "Cooper, G. E., Harper, R. P. \"The Use of Pilot Rating in the "
+        "Evaluation of Aircraft Handling Qualities.\" NASA TN D-5153, 1969.",
+        "MIL-STD-1797 / MIL-F-8785C &mdash; flying-qualities requirements and "
+        "the modal criteria a realistic model should meet.",
+        "Klein, V., Morelli, E. A. <i>Aircraft System Identification: Theory "
+        "and Practice</i>, AIAA, 2006 &mdash; extracting derivatives from "
+        "flight (and JSBSim) test data.",
+    ]:
+        story.append(bullet(b))
+
 
 # ============================================================================
 # Part III — The OpenFOAM -> JSBSim CFD workflow
@@ -7562,6 +7619,1291 @@ def add_of_verification(story):
         "A flight model is never finished, only progressively less wrong. CFD "
         "gets you a credible first model; trim, the eigenmodes, and real data "
         "tell you where to spend the next run."))
+
+
+# ============================================================================
+# Part IV — Building a highly realistic FDM: data, subsystems, and tuning
+# ============================================================================
+
+
+def add_part_iv_separator(story):
+    story.append(PageBreak())
+    story.append(Spacer(1, 52 * mm))
+    story.append(Paragraph("Part IV", ParagraphStyle(
+        "PartLabel4", fontName="Helvetica-Bold", fontSize=18,
+        textColor=colors.HexColor("#1d5d9b"), alignment=TA_CENTER,
+        spaceAfter=12)))
+    story.append(Paragraph(
+        "Building a Highly Realistic FDM:<br/>Data, Subsystems, and Tuning",
+        ParagraphStyle(
+            "PartTitle4", fontName="Helvetica-Bold", fontSize=25,
+            textColor=colors.HexColor("#0d3b66"), alignment=TA_CENTER,
+            leading=31)))
+    story.append(Spacer(1, 12 * mm))
+    story.append(Paragraph(
+        "Parts I-III give you the engine, the math, and a way to generate "
+        "aerodynamic data. Realism, though, lives in the details: where the "
+        "data comes from and how you blend it, how the mass, propulsion, "
+        "landing-gear, flight-control and sensor subsystems are built and "
+        "tuned, how stall and spin are captured, and how you script tests and "
+        "match the result against published performance and handling "
+        "qualities. Part IV is the practitioner's half of the manual — a "
+        "distillation of the JSBSim source, the reference manual, the "
+        "FlightGear wiki and the developer forums into a concrete recipe for "
+        "an airframe a test pilot would recognise. Every subsystem section is "
+        "anchored in the source so you know exactly which XML element drives "
+        "which line of code.",
+        ParagraphStyle("PartIntro4", parent=BODY_STYLE,
+                       alignment=TA_CENTER, fontSize=11, leading=15,
+                       leftIndent=22 * mm, rightIndent=22 * mm)))
+
+
+# ----------------------------------------------------------------------------
+def add_fdm_data_sources(story):
+    story.append(PageBreak())
+    heading("Sources of Aerodynamic Data and the Fidelity Ladder", 0, story)
+    story.append(p(
+        "A JSBSim model is only as realistic as the numbers in its tables. "
+        "Before tuning anything you must decide where the coefficients come "
+        "from, because that sets the ceiling on fidelity. The methods form a "
+        "ladder: each rung costs more and returns more truth. A good model "
+        "usually <i>blends</i> rungs — cheap methods for the bulk of the "
+        "envelope, expensive ones where the cheap methods fail."))
+
+    heading("The fidelity ladder", 1, story)
+    data = [
+        ["Method", "Fidelity", "Effort", "Best for"],
+        ["Aeromatic / Aeromatic++", "low", "minutes",
+         "first flyable model from POH-level specs"],
+        ["USAF Digital DATCOM", "low-med", "hours",
+         "semi-empirical derivatives for conventional layouts; XML export"],
+        ["Vortex-lattice (AVL, XFLR5)", "medium", "hours",
+         "linear derivatives, control power, neutral point (attached flow)"],
+        ["Panel + viscous (VSPAero)", "medium", "hours-days",
+         "geometry-driven polars and derivatives from an OpenVSP model"],
+        ["RANS CFD (OpenFOAM)", "med-high", "days-weeks",
+         "nonlinear high-" + _g("α") + ", compressibility, drag (see Part III)"],
+        ["Wind tunnel", "high", "weeks+",
+         "trusted static + forced-oscillation data on a real model"],
+        ["Flight test (system ID)", "highest", "program",
+         "the truth; used to correct everything above"],
+    ]
+    story.append(_oftab(data, [3.7 * cm, 2.0 * cm, 2.0 * cm, 8.0 * cm]))
+
+    heading("Reading data from a POH or type certificate", 1, story)
+    story.append(p(
+        "The Pilot's Operating Handbook (POH), type-certificate data sheet "
+        "and manufacturer's three-view are the cheapest real data you will "
+        "ever get. They pin down geometry (span, area, chord, lengths), "
+        "weights and CG envelope, and performance anchors you can tune to: "
+        "stall speeds (clean and flap), V<sub>x</sub>/V<sub>y</sub> and "
+        "climb rate, cruise TAS and fuel flow, service ceiling, never-exceed "
+        "speed, and takeoff/landing distances. Each of these is a constraint "
+        "the finished FDM must reproduce."))
+
+    heading("Digital DATCOM", 1, story)
+    story.append(p(
+        "The USAF Stability and Control Digital DATCOM is a semi-empirical "
+        "code: from a geometric description it returns the longitudinal "
+        "coefficients C<sub>D</sub>, C<sub>L</sub>, C<sub>m</sub>, "
+        "C<sub>N</sub>, C<sub>A</sub> and the key derivatives "
+        "dC<sub>L</sub>/d" + _g("α") + ", dC<sub>m</sub>/d" + _g("α") + ", "
+        "dC<sub>Y</sub>/d" + _g("β") + ", dC<sub>n</sub>/d" + _g("β") + ", "
+        "dC<sub>l</sub>/d" + _g("β") + ". Modern builds export an XML data "
+        "table directly consumable by JSBSim and FlightGear, and MATLAB's "
+        "Aerospace Toolbox can import the output. It is fast and ideal for "
+        "conventional layouts, but it is interpolation over a database of "
+        "wind-tunnel results, so it is weakest exactly where airframes get "
+        "interesting: high " + _g("α") + ", unusual planforms, strong "
+        "interference."))
+
+    heading("Vortex-lattice and panel methods", 1, story)
+    story.append(p(
+        "Mark Drela's <b>AVL</b> and the GUI-driven <b>XFLR5</b> solve the "
+        "vortex-lattice problem in seconds and give excellent linear "
+        "derivatives, control effectiveness and the neutral point for "
+        "attached flow — perfect for the bulk of the cruise envelope and for "
+        "cross-checking CFD. <b>VSPAero</b>, attached to an OpenVSP geometry, "
+        "adds an actuator-disk and a viscous drag build-up and has a "
+        "documented community workflow for producing JSBSim aero tables. "
+        "Their shared blind spot is separation: none model stall or "
+        "post-stall, so they must be supplemented by CFD, tunnel or empirical "
+        "data above the linear range."))
+
+    heading("Wind tunnel and flight test", 1, story)
+    story.append(p(
+        "Wind-tunnel data — static sweeps plus forced-oscillation runs for "
+        "the damping derivatives — is the classical high-fidelity source. "
+        "Flight test is the ultimate authority: through "
+        "<i>parameter identification</i> (fitting derivatives to measured "
+        "doublet/sweep responses) you extract the real stability and control "
+        "derivatives and use them to correct the model. Uncertainty in those "
+        "derivatives can be bounded with Monte-Carlo sweeps to show the model "
+        "stays well-behaved across the credible range."))
+
+    heading("Combining sources and comparable aircraft", 1, story)
+    story.append(p(
+        "Real models are hybrids: a linear core from AVL/DATCOM, nonlinear "
+        "high-" + _g("α") + " lift and drag from CFD or tunnel data, damping "
+        "derivatives from forced oscillation, and a final flight-test "
+        "calibration. When no data exists for your aircraft, borrow from a "
+        "<i>comparable</i> one — a similar configuration, aspect ratio and "
+        "mission — and scale by geometry; it is far better than a guess and a "
+        "standard JSBSim community practice. Whatever the mix, record the "
+        "provenance of every number; that audit trail is what lets you debug "
+        "a misbehaving model later."))
+    story.append(quote(
+        "The community's collective wisdom is captured in documents such as "
+        "&quot;A Journal for the Creation and Refinement of a JSBSim Aircraft "
+        "Flight Model&quot; — read one before starting your first airframe."))
+
+
+# ----------------------------------------------------------------------------
+def add_fdm_aeromatic(story):
+    story.append(PageBreak())
+    heading("Aeromatic: Bootstrapping a Flyable Model", 0, story)
+    story.append(p(
+        "Aeromatic is the fastest way from a blank page to an aircraft that "
+        "flies. It asks for a minimal set of specifications and generates "
+        "plausible JSBSim configuration files using simplifying assumptions. "
+        "There are two flavours: the original web tool (PHP) at "
+        "jsbsim.sourceforge.net, and the more capable C++ command-line "
+        "program <font face='Courier'>aeromatic++</font> shipped in "
+        "<font face='Courier'>utils/aeromatic++/</font>. For anything beyond "
+        "a toy, use the C++ version."))
+
+    heading("What you feed it", 1, story)
+    story.append(p(
+        "The better your inputs, the less Aeromatic guesses. Supply as much "
+        "as you can from the POH:"))
+    for b in [
+        "Aircraft class (glider, light single, transport, fighter, &hellip;) "
+        "and gross weight.",
+        "Geometry: wing span, wing area, length; control-surface presence.",
+        "Engine type and power/thrust; number of engines; propeller or jet.",
+        "Performance anchors where the tool accepts them (cruise, "
+        "V<sub>stall</sub>).",
+    ]:
+        story.append(bullet(b))
+
+    heading("What it produces", 1, story)
+    story.append(p(
+        "A complete starter set: an <b>aircraft file</b> (metrics, mass "
+        "balance, a parametric aerodynamics block, ground reactions and a "
+        "basic flight-control system), an <b>engine file</b>, and — for "
+        "propeller aircraft — a <b>thruster/propeller file</b>. The "
+        "aerodynamics are built from textbook relations (an elliptic-ish lift "
+        "curve, a parabolic drag polar, derivative estimates from aspect "
+        "ratio and tail volume), which is why the result flies but does not "
+        "yet match any specific airframe."))
+
+    heading("Assumptions and limitations", 1, story)
+    for b in [
+        "<b>One engine type per model.</b> Mixed propulsion (e.g. "
+        "piston + jet) must be added by hand afterwards.",
+        "<b>Generic derivatives.</b> Damping and control derivatives are "
+        "rules of thumb; replace them with DATCOM/CFD/flight values for "
+        "fidelity.",
+        "<b>Linear, symmetric aero.</b> The stock yaw axis does not depend on "
+        "angle of attack, so an out-of-the-box Aeromatic model will not spin "
+        "realistically until you add C<sub>n</sub>(" + _g("α") + ", " +
+        _g("β") + ") terms (see the stall/spin chapter).",
+    ]:
+        story.append(bullet(b))
+
+    heading("Refinement workflow and common pitfalls", 1, story)
+    story.append(p(
+        "Treat the Aeromatic output as scaffolding: get it trimming and "
+        "flying, then replace tables and derivatives source-by-source, "
+        "re-validating after each change. The FlightGear wiki warns that it "
+        "is &quot;easy to make changes that result in an unflyable FDM&quot; "
+        "— the two classic mistakes are:"))
+    for b in [
+        "<b>Breaking left/right symmetry</b> when moving locations — a "
+        "displaced gear, tank or point mass injects a phantom roll/yaw bias.",
+        "<b>Moving the CG too far from the AERORP</b> — a large CG-to-"
+        "aerodynamic-reference offset corrupts the pitching-moment build-up "
+        "and the static margin, often producing an un-trimmable or "
+        "divergent aircraft.",
+    ]:
+        story.append(bullet(b))
+
+
+# ----------------------------------------------------------------------------
+def add_fdm_mass_balance(story):
+    story.append(PageBreak())
+    heading("Mass, Balance, Inertia, and Fuel Realism", 0, story)
+    story.append(p(
+        "Nothing affects how an aircraft flies more than where its mass is. "
+        "The CG sets the static margin and trim; the inertia tensor sets the "
+        "rotational response and the modal frequencies; fuel burn moves the "
+        "CG in flight. Get this section wrong and no amount of aerodynamic "
+        "tuning will make the model feel right."))
+
+    heading("The mass_balance block", 1, story)
+    story.append(p(
+        "Empty inertias are given about the empty-weight CG in the structural "
+        "frame; JSBSim adds point masses and fuel automatically. Note the "
+        "<font face='Courier'>ixz</font> sign convention: JSBSim expects the "
+        "<i>actual</i> product of inertia (positive nose-up coupling is "
+        "negative ixz for most aircraft)."))
+    code("""\
+<mass_balance>
+  <ixx unit="SLUG*FT2">  948 </ixx>
+  <iyy unit="SLUG*FT2"> 1346 </iyy>
+  <izz unit="SLUG*FT2"> 1967 </izz>
+  <ixz unit="SLUG*FT2">    0 </ixz>          <!-- XZ product of inertia -->
+  <emptywt unit="LBS"> 1500 </emptywt>
+  <location name="CG" unit="IN"> <x>41.0</x><y>0</y><z>36.5</z> </location>
+  <pointmass name="pilot">
+    <weight unit="LBS">180</weight>
+    <location unit="IN"> <x>36</x><y>-14</y><z>40</z> </location>
+  </pointmass>
+</mass_balance>""")
+
+    heading("Estimating the inertia tensor", 1, story)
+    story.append(p(
+        "If you have CAD, take the inertias straight from it about the CG. "
+        "Otherwise estimate from radii of gyration: I = m&middot;k&sup2;, "
+        "with k as a fraction of span (roll), length (pitch) and their blend "
+        "(yaw). Roskam and the USAF DATCOM tabulate non-dimensional radii of "
+        "gyration by aircraft class — a far better starting point than a "
+        "guess. Sanity rule for conventional aircraft: I<sub>zz</sub> &gt; "
+        "I<sub>yy</sub> &gt; I<sub>xx</sub>, and I<sub>zz</sub> &asymp; "
+        "I<sub>xx</sub> + I<sub>yy</sub>."))
+
+    heading("Point masses and loadout", 1, story)
+    story.append(p(
+        "Crew, passengers, payload and stores are <font face='Courier'>"
+        "&lt;pointmass&gt;</font> elements; JSBSim sums their mass, shifts the "
+        "CG and augments the inertia tensor with their parallel-axis "
+        "contributions. Model the loading cases you care about (forward CG, "
+        "aft CG, max gross) — handling differs markedly between them, and the "
+        "aft-CG case is where stability margins get thin."))
+
+    heading("Fuel tanks and in-flight CG shift", 1, story)
+    story.append(p(
+        "Each <font face='Courier'>&lt;tank&gt;</font> has a location, "
+        "capacity and contents; the propulsion model accumulates "
+        "&Sigma;(tank position &times; tank contents) into the mass budget "
+        "(<font face='Courier'>FGPropulsion.cpp:579-586</font>), so burning "
+        "fuel moves the CG in real time. Tank realism levers:"))
+    for b in [
+        "<font face='Courier'>&lt;capacity&gt;</font> / "
+        "<font face='Courier'>&lt;contents&gt;</font> in LBS or KG; "
+        "<font face='Courier'>&lt;density&gt;</font> or a named "
+        "<font face='Courier'>&lt;type&gt;</font> (AVGAS, JET-A).",
+        "<font face='Courier'>&lt;priority&gt;</font> and the engine's "
+        "<font face='Courier'>&lt;feed&gt;</font> list set which tanks drain "
+        "first — model real fuel-management to capture CG migration.",
+        "<font face='Courier'>&lt;unusable&gt;</font> and "
+        "<font face='Courier'>&lt;standpipe&gt;</font> reserve fuel that "
+        "cannot be burned or dumped — important for range and endurance "
+        "fidelity (<font face='Courier'>FGTank.h:113-142</font>).",
+    ]:
+        story.append(bullet(b))
+    story.append(quote(
+        "A model that trims beautifully full of fuel and becomes "
+        "un-trimmable near empty almost always has a tank in the wrong place: "
+        "check the fuel-induced CG travel against the POH envelope."))
+
+
+# ----------------------------------------------------------------------------
+def add_fdm_propulsion_practice(story):
+    story.append(PageBreak())
+    heading("Propulsion Realism in Practice", 0, story)
+    story.append(p(
+        "JSBSim separates the <i>engine</i> (makes power/thrust) from the "
+        "<i>thruster</i> (turns it into force: propeller, nozzle, rotor or "
+        "direct) and the <i>tanks</i> (hold fuel). The "
+        "<font face='Courier'>&lt;propulsion&gt;</font> block wires them "
+        "together; engine and thruster definitions live in separate files "
+        "loaded from the aircraft's <font face='Courier'>Engines/</font> "
+        "folder or the global <font face='Courier'>engine/</font> library "
+        "(<font face='Courier'>FGPropulsion.cpp:389-489</font>)."))
+    code("""\
+<propulsion>
+  <engine file="Continental A-65-8">
+    <feed>0</feed>                       <!-- tank index this engine draws -->
+    <thruster file="CM7445_MCCauley">
+      <location unit="IN"> <x>-5</x><y>0</y><z>0</z> </location>
+      <orient   unit="DEG"> <roll>0</roll><pitch>0</pitch><yaw>0</yaw> </orient>
+    </thruster>
+  </engine>
+  <tank type="FUEL" number="0">
+    <location unit="IN"> <x>45</x><y>0</y><z>30</z> </location>
+    <capacity unit="LBS">  108 </capacity>
+    <contents unit="LBS">   90 </contents>
+  </tank>
+</propulsion>""")
+
+    heading("Piston engines", 1, story)
+    story.append(p(
+        "The piston model (<font face='Courier'>FGPiston</font>) builds "
+        "manifold pressure from an intake-impedance network and computes "
+        "power and fuel flow from displacement, RPM, volumetric efficiency "
+        "and BSFC. The practical tuning order, per the FlightGear wiki, is:"))
+    for b in [
+        "<b><font face='Courier'>ram-air-factor</font></b> first, to hit the "
+        "right cruise manifold pressure.",
+        "<b><font face='Courier'>volumetric-efficiency</font></b> next, the "
+        "primary control on fuel flow at a given MAP/RPM (boosted engines may "
+        "exceed 1.0).",
+        "<b><font face='Courier'>bsfc</font></b> last, to match power "
+        "(defining <font face='Courier'>&lt;bsfc&gt;</font> overrides the "
+        "built-in horsepower calculation).",
+    ]:
+        story.append(bullet(b))
+    story.append(p(
+        "<font face='Courier'>&lt;minmp&gt;</font>/"
+        "<font face='Courier'>&lt;idlerpm&gt;</font> set the idle/throttle-"
+        "response slope; <font face='Courier'>&lt;maxmp&gt;</font>/"
+        "<font face='Courier'>&lt;maxrpm&gt;</font> set intake resistance; the "
+        "<font face='Courier'>&lt;numboostspeeds&gt;</font> and "
+        "<font face='Courier'>ratedboost/ratedpower/ratedaltitude</font> "
+        "elements model superchargers "
+        "(<font face='Courier'>FGPiston.h:66-112</font>). A real, complete "
+        "example (Aeromatic-generated, then hand-checked):"))
+    code("""\
+<piston_engine name="Continental A-65-8">
+  <minmp unit="INHG">         10.0 </minmp>
+  <maxmp unit="INHG">         28.5 </maxmp>
+  <displacement unit="IN3">  171.0 </displacement>
+  <maxhp>                       65 </maxhp>
+  <cycles>                     4.0 </cycles>
+  <idlerpm>                  700.0 </idlerpm>
+  <maxrpm>                  2800.0 </maxrpm>
+  <volumetric-efficiency>     0.85 </volumetric-efficiency>
+  <stroke unit="IN">         3.625 </stroke>
+  <bore   unit="IN">         3.875 </bore>
+  <cylinders>                    4 </cylinders>
+  <compression-ratio>          6.3 </compression-ratio>
+</piston_engine>""")
+
+    heading("Turbines: turbojets and turbofans", 1, story)
+    story.append(p(
+        "<font face='Courier'>FGTurbine</font> models two spools (N1 fan, N2 "
+        "core) with lag-filtered spool-up/down, thrust looked up against Mach "
+        "and altitude, and optional augmentation. Key knobs "
+        "(<font face='Courier'>FGTurbine.h:84-109</font>): "
+        "<font face='Courier'>&lt;milthrust&gt;</font>/"
+        "<font face='Courier'>&lt;maxthrust&gt;</font> (dry / afterburning), "
+        "<font face='Courier'>&lt;bypassratio&gt;</font>, "
+        "<font face='Courier'>&lt;tsfc&gt;</font>/"
+        "<font face='Courier'>&lt;atsfc&gt;</font> (fuel consumption), "
+        "<font face='Courier'>&lt;idlen1/2&gt;</font>, "
+        "<font face='Courier'>&lt;maxn1/2&gt;</font>, the spool times "
+        "<font face='Courier'>&lt;n1spinup&gt;</font>/"
+        "<font face='Courier'>&lt;n2spinup&gt;</font>, and "
+        "<font face='Courier'>&lt;augmented&gt;</font>/"
+        "<font face='Courier'>&lt;augmethod&gt;</font> for the afterburner. "
+        "The thrust tables are the heart of fidelity — get them from the "
+        "engine deck if you can. A J79 (F-4) header:"))
+    code("""\
+<turbine_engine name="J79">
+  <milthrust>  10000.0 </milthrust>
+  <maxthrust>  15800.0 </maxthrust>     <!-- with afterburner -->
+  <bypassratio>    0.0 </bypassratio>
+  <tsfc>          0.98 </tsfc>
+  <atsfc>         1.96 </atsfc>          <!-- afterburning TSFC -->
+  <idlen2>        53.0 </idlen2>
+  <maxn1>        100.0 </maxn1> <maxn2> 100.0 </maxn2>
+  <augmented>        1 </augmented> <augmethod> 1 </augmethod>
+  <!-- IdleThrust / MilThrust / MaxThrust tables vs mach, altitude ... -->
+</turbine_engine>""")
+
+    heading("Turboprops, electric, and rockets", 1, story)
+    for b in [
+        "<b>Turboprop</b> (<font face='Courier'>FGTurboProp</font>): single "
+        "spool, beta-range below <font face='Courier'>&lt;betarangeend&gt;"
+        "</font>, ITT modelling, an IELU torque limiter, and power "
+        "(<font face='Courier'>&lt;maxpower&gt;</font>, "
+        "<font face='Courier'>&lt;psfc&gt;</font>) driving a constant-speed "
+        "prop.",
+        "<b>Electric</b> (<font face='Courier'>FGElectric</font>): a single "
+        "<font face='Courier'>&lt;power&gt;</font> in watts, linear in "
+        "throttle, zero fuel burn — the natural choice for eVTOL and "
+        "electric UAS.",
+        "<b>Rocket</b> (<font face='Courier'>FGRocket</font>): specific "
+        "impulse <font face='Courier'>&lt;isp&gt;</font> and an optional "
+        "thrust-vs-time table; consumes both fuel and oxidizer tanks.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Fuel system and matching performance", 1, story)
+    story.append(p(
+        "Fuel is consumed by priority: tanks with the lowest "
+        "<font face='Courier'>&lt;priority&gt;</font> number drain first, and "
+        "an engine only draws from the tanks in its "
+        "<font face='Courier'>&lt;feed&gt;</font> list "
+        "(<font face='Courier'>FGPropulsion.cpp:169-263</font>). Validate "
+        "propulsion against three anchors from the POH/engine deck: static "
+        "sea-level thrust or takeoff power, cruise fuel flow at a known "
+        "altitude and power setting, and best climb rate. Tune "
+        "<font face='Courier'>volumetric-efficiency</font>/"
+        "<font face='Courier'>tsfc</font> to the fuel flow and "
+        "thrust/power coefficients to the climb and top speed."))
+
+
+# ----------------------------------------------------------------------------
+def add_fdm_propellers(story):
+    story.append(PageBreak())
+    heading("Propellers, Thrusters, and the Constant-Speed Governor", 0,
+            story)
+    story.append(p(
+        "For propeller aircraft the thruster is where the engine's power "
+        "becomes thrust, and it is a common source of unrealistic behaviour. "
+        "<font face='Courier'>FGPropeller</font> works in coefficient form, "
+        "exactly like the aerodynamics: non-dimensional thrust and power "
+        "coefficients are tabulated against advance ratio and blade pitch."))
+
+    heading("The propeller file", 1, story)
+    story.append(p(
+        "Geometry and limits "
+        "(<font face='Courier'>FGPropeller.h:59-101</font>): "
+        "<font face='Courier'>&lt;diameter&gt;</font>, "
+        "<font face='Courier'>&lt;numblades&gt;</font>, the polar moment "
+        "<font face='Courier'>&lt;ixx&gt;</font> (sets spin-up inertia and "
+        "gyroscopic torque), <font face='Courier'>&lt;gearratio&gt;</font>, "
+        "the pitch range <font face='Courier'>&lt;minpitch&gt;</font>/"
+        "<font face='Courier'>&lt;maxpitch&gt;</font> and governed RPM range "
+        "<font face='Courier'>&lt;minrpm&gt;</font>/"
+        "<font face='Courier'>&lt;maxrpm&gt;</font>, plus tuning multipliers "
+        "<font face='Courier'>&lt;ct_factor&gt;</font>/"
+        "<font face='Courier'>&lt;cp_factor&gt;</font>."))
+    code("""\
+<propeller name="CM7445" version="1.0">
+  <ixx>        1.67 </ixx>
+  <diameter unit="IN"> 74.0 </diameter>
+  <numblades>     2 </numblades>
+  <gearratio>   1.0 </gearratio>
+  <minpitch>     10 </minpitch>
+  <maxpitch>     25 </maxpitch>           <!-- fixed-pitch: omit governor -->
+  <table name="C_THRUST" type="internal">
+    <independentVar lookup="row">advance-ratio</independentVar>
+    <tableData> 0.0  0.0653
+                0.4  0.0524
+                0.8  0.0241
+                1.2 -0.0140 </tableData>
+  </table>
+  <table name="C_POWER" type="internal">
+    <independentVar lookup="row">advance-ratio</independentVar>
+    <tableData> 0.0  0.0383
+                0.4  0.0378
+                0.8  0.0291
+                1.2  0.0097 </tableData>
+  </table>
+</propeller>""")
+
+    heading("Coefficients, advance ratio, and Mach", 1, story)
+    story.append(p(
+        "The advance ratio J = V/(n&middot;D) (n in rev/s) is the propeller's "
+        "&quot;angle of attack&quot;. Thrust and power follow:"))
+    math("T = C<sub>T</sub>(J)&middot;" + _g("ρ") + "&middot;n&sup2;"
+         "&middot;D&#x2074;        P = C<sub>P</sub>(J)&middot;" + _g("ρ") +
+         "&middot;n&sup3;&middot;D&#x2075;")
+    story.append(p(
+        "Optional <font face='Courier'>CT_MACH</font>/"
+        "<font face='Courier'>CP_MACH</font> tables (indexed by helical tip "
+        "Mach) capture compressibility losses as the tips approach the speed "
+        "of sound (<font face='Courier'>FGPropeller.h:333-334</font>). "
+        "Induced velocity is solved from momentum theory "
+        "(<font face='Courier'>FGPropeller.cpp:256-261</font>)."))
+
+    heading("The constant-speed governor", 1, story)
+    story.append(p(
+        "A constant-speed unit holds a target RPM by varying blade pitch "
+        "between <font face='Courier'>minpitch</font> and "
+        "<font face='Courier'>maxpitch</font>. The pilot controls split as on "
+        "the real aircraft: <b>throttle</b> sets manifold pressure (power), "
+        "the <b>prop lever</b> sets governed RPM, and <b>mixture</b> sets "
+        "fuel/air. Set <font face='Courier'>&lt;constspeed&gt;1&lt;/"
+        "constspeed&gt;</font> and a sensible RPM band; the governor then "
+        "trades pitch to keep RPM as airspeed and power change."))
+
+    heading("P-factor, sense, windmilling, and reverse", 1, story)
+    for b in [
+        "<b><font face='Courier'>&lt;sense&gt;</font></b> (&plusmn;1) sets "
+        "rotation direction; it drives the slipstream swirl and the engine "
+        "torque reaction that the aircraft must trim against.",
+        "<b><font face='Courier'>&lt;p_factor&gt;</font></b> shifts the "
+        "thrust application point with angle of attack, producing the "
+        "characteristic yaw at high " + _g("α") + "/high power "
+        "(<font face='Courier'>FGPropeller.cpp:266-278</font>).",
+        "<b>Windmilling</b> (negative thrust, large drag) emerges naturally "
+        "when J pushes C<sub>T</sub> negative; <b>feathering</b> "
+        "(<font face='Courier'>maxpitch</font> aligned with the flow) cuts "
+        "that drag for engine-out realism.",
+        "<b>Reverse / beta</b> range gives ground braking; pair it with the "
+        "turboprop <font face='Courier'>&lt;betarangeend&gt;</font> or a "
+        "<font face='Courier'>&lt;reversepitch&gt;</font>.",
+    ]:
+        story.append(bullet(b))
+
+
+# ----------------------------------------------------------------------------
+def add_fdm_gear(story):
+    story.append(PageBreak())
+    heading("Landing Gear and Ground Handling", 0, story)
+    story.append(p(
+        "Ground handling is where many otherwise-good models fall apart: the "
+        "aircraft bounces, skitters, ground-loops or sinks through the "
+        "runway. JSBSim's gear is a spring-damper strut with a friction "
+        "model, defined as <font face='Courier'>&lt;contact&gt;</font> "
+        "elements inside <font face='Courier'>&lt;ground_reactions&gt;</font> "
+        "(<font face='Courier'>FGLGear.cpp</font>, "
+        "<font face='Courier'>FGGroundReactions.cpp:135-156</font>)."))
+
+    heading("The strut force law", 1, story)
+    story.append(p(
+        "Each gear computes a normal strut force from compression and "
+        "compression rate (<font face='Courier'>FGLGear.cpp:624-653</font>). "
+        "The force is the spring term plus a damping term, clamped so the "
+        "strut can only push:"))
+    math("F<sub>strut</sub> = &minus;( k&middot;x + c&middot;v ),   "
+         "clamped to F &le; 0")
+    story.append(p(
+        "with separate coefficients for compression ("
+        "<font face='Courier'>&lt;damping_coeff&gt;</font>) and rebound "
+        "(<font face='Courier'>&lt;damping_coeff_rebound&gt;</font>), and an "
+        "optional <font face='Courier'>type=\"SQUARE\"</font> that makes "
+        "damping proportional to v&sup2; for stronger control of extreme "
+        "compressions. A representative BOGEY contact:"))
+    code("""\
+<contact type="BOGEY" name="LEFT_MAIN">
+  <location unit="IN"> <x>58</x><y>-50</y><z>-18</z> </location>
+  <static_friction>  0.80 </static_friction>
+  <dynamic_friction> 0.50 </dynamic_friction>
+  <rolling_friction> 0.02 </rolling_friction>
+  <spring_coeff         unit="LBS/FT">     5400 </spring_coeff>
+  <damping_coeff        unit="LBS/FT/SEC">  160 </damping_coeff>
+  <damping_coeff_rebound unit="LBS/FT/SEC"> 320 </damping_coeff_rebound>
+  <max_steer unit="DEG">  0 </max_steer>       <!-- 0 = fixed, 360 = caster -->
+  <brake_group> LEFT </brake_group>
+  <retractable> 1 </retractable>
+</contact>""")
+
+    heading("Friction, steering, and brakes", 1, story)
+    for b in [
+        "<b>Friction</b> uses static, dynamic and rolling coefficients; "
+        "braking adds a fraction of (static &minus; rolling) scaled by brake "
+        "position (<font face='Courier'>FGLGear.cpp:588-594</font>). Lateral "
+        "(cornering) force uses Pacejka's Magic Formula with built-in "
+        "coefficients (stiffness 0.06, shape 2.8, peak = static "
+        "coefficient, curvature 1.03), overridable by a "
+        "<font face='Courier'>CORNERING_COEFF</font> table "
+        "(<font face='Courier'>FGLGear.cpp:596-615</font>).",
+        "<b>Steering</b> is set by <font face='Courier'>&lt;max_steer&gt;"
+        "</font>: 0&deg; = fixed, 360&deg; (or "
+        "<font face='Courier'>&lt;castered&gt;1</font>) = free-castering, "
+        "anything between = commanded steerable via "
+        "<font face='Courier'>fcs/steer-cmd-norm</font> "
+        "(<font face='Courier'>FGLGear.cpp:151-165</font>).",
+        "<b>Brake groups</b> LEFT/RIGHT/CENTER (NOSE/TAIL map to CENTER) tie "
+        "the gear to <font face='Courier'>fcs/&hellip;-brake-cmd-norm</font> "
+        "(<font face='Courier'>FGLGear.cpp:204-217</font>); differential "
+        "braking is how taildraggers and many jets steer at low speed.",
+        "<b>STRUCTURE</b> contacts (wingtips, tailskid, nacelles) are "
+        "non-wheeled crash/scrape points; <b><font face='Courier'>"
+        "&lt;retractable&gt;</font></b> ties the strut to "
+        "<font face='Courier'>gear/unit[i]/pos-norm</font>.",
+    ]:
+        story.append(bullet(b))
+
+    heading("The ground surface", 1, story)
+    story.append(p(
+        "<font face='Courier'>FGSurface</font> exposes "
+        "<font face='Courier'>ground/solid</font> (water vs land — a "
+        "non-solid surface gives no weight-on-wheels), "
+        "<font face='Courier'>ground/bumpiness</font> (procedural runway "
+        "roughness), and friction-factor and maximum-force multipliers, all "
+        "settable per surface to model wet, icy or rough fields "
+        "(<font face='Courier'>FGSurface.cpp</font>)."))
+
+    heading("Tuning for stable, realistic ground behaviour", 1, story)
+    for b in [
+        "<b>Spring rate</b> &asymp; weight-on-the-gear / static deflection. "
+        "Start from the real strut travel and the static load split.",
+        "<b>Use the softest spring you can live with.</b> Over-stiff gear "
+        "with heavy damping injects energy on each timestep and makes the "
+        "aircraft hop — a frequently reported failure on the JSBSim devel "
+        "list.",
+        "<b>Rebound damping &ge; compression damping</b> to absorb the "
+        "landing without spitting the aircraft back into the air; consider "
+        "<font face='Courier'>type=\"SQUARE\"</font> to tame extreme touchdowns.",
+        "<b>Watch the timestep.</b> Stiff gear needs a small "
+        "<font face='Courier'>dt</font>; if the strut can compress more than "
+        "physically possible in one step, forces explode. JSBSim limits "
+        "compression speed per step, but soft gear + small dt is the robust "
+        "combination.",
+        "<b>Instrument it.</b> Log <font face='Courier'>gear/unit[i]/"
+        "compression-ft</font>, <font face='Courier'>&hellip;/WOW</font> and "
+        "<font face='Courier'>&hellip;/compression-velocity-fps</font> during "
+        "a touchdown to see exactly what the strut is doing.",
+    ]:
+        story.append(bullet(b))
+
+
+# ----------------------------------------------------------------------------
+def add_fdm_fcs(story):
+    story.append(PageBreak())
+    heading("Flight Control Systems in Practice", 0, story)
+    story.append(p(
+        "The flight-control system maps pilot commands to surface "
+        "deflections. In JSBSim it is a set of <font face='Courier'>"
+        "&lt;channel&gt;</font>s of components that execute in order, each "
+        "reading and writing the property tree, so a channel is literally a "
+        "signal-flow diagram in XML (<font face='Courier'>FGFCS.cpp"
+        "</font>, <font face='Courier'>FGFCSChannel.h</font>). The same "
+        "machinery serves three sections — "
+        "<font face='Courier'>&lt;flight_control&gt;</font>, "
+        "<font face='Courier'>&lt;system&gt;</font> and "
+        "<font face='Courier'>&lt;autopilot&gt;</font>."))
+
+    heading("The component catalogue", 1, story)
+    data = [
+        ["Component", "Element", "Key parameters / transfer"],
+        ["Pure gain", "pure_gain", "gain (constant or property)"],
+        ["Scheduled gain", "scheduled_gain", "gain &times; table(schedule)"],
+        ["Aerosurface scale", "aerosurface_scale",
+         "map domain&rarr;range; cmd-norm &harr; surface-rad"],
+        ["Summer", "summer", "&Sigma; inputs + bias, clipto"],
+        ["Lag filter", "lag_filter", "C1/(s+C1)"],
+        ["Lead-lag / washout", "lead_lag_filter / washout_filter",
+         "(C1 s+C2)/(C3 s+C4); s/(s+C1)"],
+        ["2nd-order filter", "second_order_filter", "full biquad C1..C6"],
+        ["Integrator", "integrator", "rect/trap/ab2/ab3, with trigger"],
+        ["PID", "pid", "kp, ki, kd; trigger (anti-windup)"],
+        ["Deadband", "deadband", "width, gain"],
+        ["Switch", "switch", "tests with AND/OR conditions, default"],
+        ["Kinematic", "kinematic", "rate-limited traverse of settings"],
+        ["Actuator", "actuator", "lag, rate_limit, hysteresis, bias, fail"],
+        ["FCS function", "fcs_function", "arbitrary &lt;function&gt;"],
+    ]
+    story.append(_oftab(data, [3.0 * cm, 4.6 * cm, 8.1 * cm]))
+    story.append(p(
+        "Every component supports an <font face='Courier'>&lt;input&gt;</font> "
+        "(prefix the property with <font face='Courier'>-</font> to negate), "
+        "an optional <font face='Courier'>&lt;output&gt;</font> to copy its "
+        "result to another property, and a <font face='Courier'>&lt;clipto&gt;"
+        "</font> to saturate it."))
+
+    heading("A control path, end to end", 1, story)
+    story.append(p(
+        "A minimal reversible pitch channel: sum pilot and trim commands, "
+        "clip to normalised range, scale to a surface angle, then publish a "
+        "normalised position for animation. From the OV-10 model "
+        "(<font face='Courier'>aircraft/OV10/OV10.xml:241-272</font>):"))
+    code("""\
+<channel name="Pitch">
+  <summer name="Pitch Trim Sum">
+    <input> fcs/elevator-cmd-norm </input>
+    <input> fcs/pitch-trim-cmd-norm </input>
+    <clipto> <min>-1</min> <max>1</max> </clipto>
+  </summer>
+  <aerosurface_scale name="Elevator Control">
+    <input> fcs/pitch-trim-sum </input>
+    <range> <min>-0.35</min> <max>0.35</max> </range>   <!-- radians -->
+    <output> fcs/elevator-pos-rad </output>
+  </aerosurface_scale>
+  <aerosurface_scale name="Elevator Normalized">
+    <input> fcs/elevator-pos-rad </input>
+    <domain> <min>-0.35</min> <max>0.35</max> </domain>
+    <range>  <min>-1</min>    <max>1</max>    </range>
+    <output> fcs/elevator-pos-norm </output>
+  </aerosurface_scale>
+</channel>""")
+    story.append(p(
+        "The aerodynamics then reads <font face='Courier'>fcs/elevator-pos-rad"
+        "</font> (or <font face='Courier'>-norm</font>) in its control "
+        "increments — the FCS and aero meet at the property tree."))
+
+    heading("Reversible, boosted, and fly-by-wire", 1, story)
+    story.append(p(
+        "The same building blocks scale from a cable-and-pulley light "
+        "aircraft (command straight to surface, with gearing and a non-linear "
+        "<font face='Courier'>kinematic</font> for flaps) to a boosted system "
+        "(add actuator dynamics) to fly-by-wire (insert filters, gains and "
+        "feedback to shape the response and add stability augmentation — next "
+        "chapter). Model control <i>gearing</i> and <i>mixing</i> explicitly: "
+        "spoileron mixing, elevon/ruddervator combinations and aileron-rudder "
+        "interconnects are just summers and gains."))
+
+    heading("Actuator realism", 1, story)
+    story.append(p(
+        "Real surfaces are not instantaneous. The "
+        "<font face='Courier'>&lt;actuator&gt;</font> component "
+        "(<font face='Courier'>FGActuator.h:54-122</font>) applies, in order, "
+        "<font face='Courier'>&lt;lag&gt;</font>, "
+        "<font face='Courier'>&lt;rate_limit&gt;</font> (optionally different "
+        "increasing/decreasing), <font face='Courier'>&lt;deadband_width&gt;"
+        "</font>, <font face='Courier'>&lt;hysteresis_width&gt;</font> "
+        "(backlash) and <font face='Courier'>&lt;bias&gt;</font>. Rate limits "
+        "matter for handling qualities: an under-rated actuator causes "
+        "pilot-induced oscillation. The component also supports injectable "
+        "failures (<font face='Courier'>fail_zero</font>, "
+        "<font face='Courier'>fail_hardover</font>, "
+        "<font face='Courier'>fail_stuck</font>) for systems testing."))
+
+
+# ----------------------------------------------------------------------------
+def add_fdm_autopilot(story):
+    story.append(PageBreak())
+    heading("Stability Augmentation, Autopilots, and Guidance", 0, story)
+    story.append(p(
+        "Once the bare airframe flies, automatic control adds realism and "
+        "utility: dampers that quell unwanted modes, autopilots that hold "
+        "states, and guidance that flies routes. All are built from the same "
+        "FCS components, placed in an <font face='Courier'>&lt;autopilot&gt;"
+        "</font> section and conventionally driven by "
+        "<font face='Courier'>ap/</font> properties."))
+
+    heading("Stability augmentation", 1, story)
+    story.append(p(
+        "A yaw damper is the canonical example: feed body yaw rate through a "
+        "<font face='Courier'>washout_filter</font> (so it fights "
+        "oscillation but not steady, commanded turns) and a gain into the "
+        "rudder. The washout's s/(s+C1) response passes transient rate and "
+        "blocks the steady component — exactly what tames a lightly damped "
+        "Dutch roll. Pitch and roll dampers feed q and p similarly. Because "
+        "augmentation sums into the same surface channel as the pilot, build "
+        "it as an extra <font face='Courier'>summer</font> input."))
+
+    heading("PID autopilot channels", 1, story)
+    story.append(p(
+        "Hold modes are PID loops closed on a state error. The C-172 "
+        "autopilot's wing-leveler shows the idiom — a realistic "
+        "<font face='Courier'>sensor</font> on bank angle, a "
+        "<font face='Courier'>switch</font> that engages the mode, and a "
+        "<font face='Courier'>pid</font> whose <font face='Courier'>"
+        "&lt;trigger&gt;</font> provides anti-windup "
+        "(<font face='Courier'>aircraft/c172x/c172ap.xml</font>):"))
+    code("""\
+<channel name="Roll wing leveler">
+  <sensor name="fcs/attitude/sensor/phi-rad">
+    <input> attitude/phi-rad </input>
+    <lag> 0.50 </lag>
+    <noise variation="PERCENT" distribution="GAUSSIAN"> 0.05 </noise>
+    <bias> 0.001 </bias>
+  </sensor>
+  <switch name="fcs/wing-leveler-ap-on-off">
+    <default value="-1"/>
+    <test value="0"> ap/attitude_hold == 1 </test>
+  </switch>
+  <pid name="fcs/roll-ap-error-pid">
+    <input> attitude/phi-rad </input>
+    <kp> ap/roll-pid-kp </kp>
+    <ki> ap/roll-pid-ki </ki>
+    <kd> ap/roll-pid-kd </kd>
+    <trigger> fcs/wing-leveler-ap-on-off </trigger>   <!-- anti-windup -->
+  </pid>
+</channel>""")
+    story.append(p(
+        "Exposing the gains as properties (<font face='Courier'>ap/roll-pid-kp"
+        "</font>, &hellip;) lets you tune them live from a script or a "
+        "console without rebuilding. Typical hold modes: attitude, altitude, "
+        "vertical speed, heading, and airspeed (often closed on throttle)."))
+
+    heading("Tuning the loops", 1, story)
+    for b in [
+        "Close inner loops first (rate/attitude), then outer (altitude, "
+        "heading) — the inner loop is the plant the outer loop sees.",
+        "Start with P only, add D to damp overshoot, add just enough I to "
+        "kill steady error; use the <font face='Courier'>&lt;trigger&gt;"
+        "</font> to stop integrator wind-up when saturated.",
+        "Schedule gains with dynamic pressure (<font face='Courier'>"
+        "scheduled_gain</font> on <font face='Courier'>aero/qbar-psf</font> or "
+        "airspeed) so the loop behaves across the envelope.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Guidance and navigation", 1, story)
+    story.append(p(
+        "<font face='Courier'>waypoint_heading</font> and "
+        "<font face='Courier'>waypoint_distance</font> components compute "
+        "great-circle bearing and range to a target latitude/longitude; feed "
+        "the bearing into the heading-hold and you have a basic LNAV. The "
+        "<font face='Courier'>angle</font> component returns the smallest "
+        "included angle (handy for heading error across the &plusmn;180&deg; "
+        "wrap). For full missions, drive setpoints from a script (see the "
+        "scripting chapter)."))
+
+
+# ----------------------------------------------------------------------------
+def add_fdm_sensors_systems(story):
+    story.append(PageBreak())
+    heading("Sensors, Systems, and Failure Modeling", 0, story)
+    story.append(p(
+        "High-fidelity work — hardware-in-the-loop, state-estimator and "
+        "autopilot development, failure analysis — needs more than perfect "
+        "states. JSBSim models imperfect sensors, arbitrary subsystems, and "
+        "injectable failures, all through the FCS component framework and the "
+        "property tree."))
+
+    heading("Imperfect sensors", 1, story)
+    story.append(p(
+        "The <font face='Courier'>&lt;sensor&gt;</font> component "
+        "(<font face='Courier'>FGSensor.h:56-127</font>) degrades a clean "
+        "signal the way real hardware does:"))
+    for b in [
+        "<b><font face='Courier'>&lt;lag&gt;</font></b> — first-order time "
+        "constant (sensor bandwidth).",
+        "<b><font face='Courier'>&lt;noise&gt;</font></b> — PERCENT or "
+        "ABSOLUTE, with UNIFORM or GAUSSIAN distribution.",
+        "<b><font face='Courier'>&lt;quantization&gt;</font></b> — bits over a "
+        "min/max range (ADC resolution).",
+        "<b><font face='Courier'>&lt;drift_rate&gt;</font></b>, "
+        "<b><font face='Courier'>&lt;bias&gt;</font></b>, "
+        "<b><font face='Courier'>&lt;gain&gt;</font></b> — slow drift, offset "
+        "and scale errors.",
+        "<b><font face='Courier'>&lt;delay&gt;</font></b> — transport delay in "
+        "time or frames.",
+    ]:
+        story.append(bullet(b))
+    story.append(p(
+        "Specialised sensors build on this: "
+        "<font face='Courier'>&lt;accelerometer&gt;</font> and "
+        "<font face='Courier'>&lt;gyro&gt;</font> take a "
+        "<font face='Courier'>&lt;location&gt;</font>/"
+        "<font face='Courier'>&lt;orientation&gt;</font> and an "
+        "<font face='Courier'>&lt;axis&gt;</font> and report the sensed "
+        "specific force / angular rate at that point (so a nose-mounted accel "
+        "feels pitch acceleration), and "
+        "<font face='Courier'>&lt;magnetometer&gt;</font> reads the field. "
+        "Feeding these — not the truth states — into your control laws is the "
+        "difference between a demo and a development rig."))
+
+    heading("Arbitrary subsystems", 1, story)
+    story.append(p(
+        "A <font face='Courier'>&lt;system&gt;</font> section is a free FCS "
+        "channel set you can use to model anything: electrical buses, "
+        "hydraulic pressure, fuel management logic, fire/overheat detection, "
+        "trim systems, or weapon/cargo logic. Because every component reads "
+        "and writes properties, the property tree is a system bus — a "
+        "<font face='Courier'>switch</font> can gate a pump on a voltage "
+        "property, a <font face='Courier'>lag_filter</font> can model "
+        "pressure build-up, and a <font face='Courier'>fcs_function</font> "
+        "can compute any algebraic relationship. JSBSim ships reusable "
+        "systems (e.g. <font face='Courier'>systems/catapult.xml</font>) you "
+        "can include."))
+
+    heading("External reactions and buoyancy", 1, story)
+    story.append(p(
+        "<font face='Courier'>&lt;external_reactions&gt;</font> add named "
+        "forces/moments in BODY, LOCAL or WIND frames whose magnitude is "
+        "driven by a property or <font face='Courier'>&lt;function&gt;</font> "
+        "— catapults, arresting hooks, tow ropes, tip-tank jettison, "
+        "winch-launch. A catapult is just a "
+        "<font face='Courier'>switch</font> writing "
+        "<font face='Courier'>external_reactions/catapult/magnitude</font> "
+        "when armed. <font face='Courier'>&lt;buoyant_forces&gt;</font> with "
+        "<font face='Courier'>&lt;gas_cell&gt;</font> (HYDROGEN/HELIUM/AIR) "
+        "and ballonets model balloons and airships "
+        "(<font face='Courier'>FGBuoyantForces</font>, "
+        "<font face='Courier'>FGGasCell</font>)."))
+
+    heading("Failure injection", 1, story)
+    story.append(p(
+        "Realism includes things going wrong. Actuators expose "
+        "<font face='Courier'>fail_zero</font>/"
+        "<font face='Courier'>fail_hardover</font>/"
+        "<font face='Courier'>fail_stuck</font>; sensors can be biased, "
+        "frozen or made noisy via their properties; engines can be starved by "
+        "emptying a tank or stopped via "
+        "<font face='Courier'>propulsion/engine[i]/set-running</font>; control "
+        "surfaces can be jammed with a <font face='Courier'>switch</font>. "
+        "Drive all of these from a script to build a repeatable failure-"
+        "scenario test suite."))
+
+
+# ----------------------------------------------------------------------------
+def add_fdm_high_alpha(story):
+    story.append(PageBreak())
+    heading("High-Angle-of-Attack, Stall, and Spin Modeling", 0, story)
+    story.append(p(
+        "Linear coefficients describe the cruise envelope; realism at the "
+        "edges — stall, departure, spin — needs nonlinear, asymmetric, "
+        "history-dependent aerodynamics. This is the hardest part of an FDM "
+        "to get right and the part that most distinguishes a serious model."))
+
+    heading("Modeling stall", 1, story)
+    story.append(p(
+        "A stall is flow separation: lift rolls over and falls while drag "
+        "rises steeply. Capture it by tabulating C<sub>L</sub> and "
+        "C<sub>D</sub> across the full " + _g("α") + " range — well past "
+        "C<sub>Lmax</sub>, through the post-stall drop, ideally to &plusmn;"
+        "90&deg; for spin and upset work. The biggest aerodynamic signature "
+        "of a stall is the drag rise, so do not neglect the high-" + _g("α") +
+        " end of the drag table."))
+
+    heading("Stall hysteresis", 1, story)
+    story.append(p(
+        "Separation and re-attachment happen at different angles, so the "
+        "stall has memory. JSBSim models this with "
+        "<font face='Courier'>&lt;alphalimits&gt;</font> and a "
+        "<font face='Courier'>&lt;hysteresis_limits&gt;</font> band, exposing "
+        "<font face='Courier'>aero/stall-hyst-norm</font> (0&rarr;1 across the "
+        "band, <font face='Courier'>FGAerodynamics.cpp</font>). Use it as a "
+        "second table dimension so the lift curve follows a different path "
+        "stalling versus recovering — the c172 model does exactly this "
+        "(<font face='Courier'>aircraft/c172x/c172x.xml</font>)."))
+    code("""\
+<alphalimits unit="DEG"> <min>-12</min> <max>22</max> </alphalimits>
+<hysteresis_limits unit="DEG"> <min>12</min> <max>18</max> </hysteresis_limits>
+...
+<table>
+  <independentVar lookup="row">aero/alpha-rad</independentVar>
+  <independentVar lookup="column">aero/stall-hyst-norm</independentVar>
+  <tableData>
+            0.0    1.0          <!-- attached   stalled -->
+    0.21    1.25   0.86
+    0.28    1.47   0.92
+    0.35    1.20   1.05         <!-- post-stall, different recovery path -->
+  </tableData>
+</table>""")
+
+    heading("Spin and departure", 1, story)
+    story.append(p(
+        "A spin is a yaw-axis instability coupled with stall. The crucial "
+        "modelling point — and a documented limitation of stock Aeromatic "
+        "output — is that the yaw moment must depend on angle of attack: a "
+        "flat C<sub>n</sub>(" + _g("β") + ") will never autorotate. For "
+        "believable spins you need:"))
+    for b in [
+        "C<sub>n</sub> and C<sub>l</sub> as functions of <i>both</i> " +
+        _g("α") + " and " + _g("β") + " (2-D tables), so post-stall yaw/roll "
+        "asymmetry can drive autorotation.",
+        "Roll and yaw damping (C<sub>lp</sub>, C<sub>nr</sub>) that change "
+        "sign or magnitude past the stall — the loss of roll damping is what "
+        "lets the spin develop.",
+        "Asymmetric wing stall and a healthy high-" + _g("α") + " drag rise "
+        "to set the spin's rotation rate and descent.",
+        "Degraded control effectiveness at high " + _g("α") + " (blanketed "
+        "elevator/rudder) so recovery requires the correct technique.",
+    ]:
+        story.append(bullet(b))
+    story.append(p(
+        "High-fidelity post-stall/spin models are built from rotary-balance "
+        "and forced-oscillation wind-tunnel data (NASA holds extensive sets) "
+        "or, increasingly, from DES/hybrid CFD; researchers use bifurcation "
+        "analysis to characterise the resulting departure, post-stall "
+        "gyration and spin modes."))
+
+    heading("Other edge effects", 1, story)
+    story.append(p(
+        "Ground effect (a multiplier table on lift and drag versus "
+        "height/span, <font face='Courier'>aero/h_b-mac-ft</font>), "
+        "compressibility (a Mach table dimension), Reynolds effects (run CFD "
+        "at flight Re), and buffet (a turbulence-like excitation past the "
+        "stall) all add realism at the margins. Remember JSBSim holds table "
+        "ends flat — your " + _g("α") + ", " + _g("β") + " and Mach tables "
+        "must actually span the envelope you intend to fly."))
+
+
+# ----------------------------------------------------------------------------
+def add_fdm_scripting(story):
+    story.append(PageBreak())
+    heading("Scripting for Automated Testing, Tuning, and System ID", 0, story)
+    story.append(p(
+        "Tuning by hand-flying is slow and unrepeatable. JSBSim's scripting "
+        "language runs the model headless through a scripted timeline, "
+        "injecting inputs and logging outputs — the backbone of regression "
+        "testing, parameter identification and disturbance studies "
+        "(<font face='Courier'>FGScript.cpp</font>)."))
+
+    heading("Anatomy of a run script", 1, story)
+    story.append(p(
+        "A <font face='Courier'>&lt;runscript&gt;</font> names an aircraft and "
+        "an initialisation (reset) file, sets the time window and step, and "
+        "contains <font face='Courier'>&lt;event&gt;</font>s and "
+        "<font face='Courier'>&lt;output&gt;</font> directives:"))
+    code("""\
+<?xml version="1.0"?>
+<runscript name="elevator doublet">
+  <use aircraft="c172x" initialize="reset01"/>
+  <run start="0.0" end="60.0" dt="0.0083333">
+    <event name="Trim">
+      <condition> simulation/sim-time-sec ge 0.0 </condition>
+      <set name="simulation/do_simple_trim" value="1"/>
+    </event>
+    <event name="Doublet up">
+      <condition> simulation/sim-time-sec ge 5.0 </condition>
+      <set name="fcs/elevator-cmd-norm" value="0.3"
+           action="FG_STEP"/>
+    </event>
+    <event name="Doublet down">
+      <condition> simulation/sim-time-sec ge 6.0 </condition>
+      <set name="fcs/elevator-cmd-norm" value="-0.3" action="FG_STEP"/>
+    </event>
+    <event name="Center">
+      <condition> simulation/sim-time-sec ge 7.0 </condition>
+      <set name="fcs/elevator-cmd-norm" value="0.0" action="FG_RAMP" tc="0.2"/>
+    </event>
+    <output name="doublet.csv" type="CSV" rate="50">
+      <rates> ON </rates> <velocities> ON </velocities>
+      <position> ON </position> <fcs> ON </fcs>
+    </output>
+  </run>
+</runscript>""")
+    story.append(p(
+        "Run it headless: <font face='Courier'>JSBSim --script=scripts/"
+        "doublet.xml</font>. Conditions use property-operator-value triples "
+        "(<font face='Courier'>ge le eq ne</font> or the symbolic forms) and "
+        "nest with <font face='Courier'>logic=\"AND|OR\"</font> "
+        "(<font face='Courier'>FGCondition.cpp:109-128</font>)."))
+
+    heading("Set actions: step, ramp, exponential", 1, story)
+    story.append(p(
+        "<font face='Courier'>&lt;set&gt;</font> changes a property as a "
+        "<font face='Courier'>FG_STEP</font>, a linear "
+        "<font face='Courier'>FG_RAMP</font> over the time constant "
+        "<font face='Courier'>tc</font>, or an "
+        "<font face='Courier'>FG_EXP</font> first-order approach; "
+        "<font face='Courier'>type=\"FG_DELTA\"</font> makes the value an "
+        "increment (<font face='Courier'>FGScript.cpp:472-495</font>). That is "
+        "all you need to synthesise the classic system-ID inputs:"))
+    for b in [
+        "<b>Doublet</b> (shown above) — excites the short-period / Dutch-roll "
+        "for damping and frequency identification.",
+        "<b>3-2-1-1</b> — a multi-step input rich across a band of "
+        "frequencies, the standard for parameter identification.",
+        "<b>Frequency sweep</b> — ramp a sinusoid's frequency via an "
+        "<font face='Courier'>fcs_function</font> to map the frequency "
+        "response.",
+        "<b>Throttle/control steps</b> — for performance points (climb, "
+        "acceleration) and trim verification.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Output, notify, and batch workflows", 1, story)
+    story.append(p(
+        "<font face='Courier'>&lt;output type=\"CSV\"&gt;</font> selects "
+        "whole subsystems (<font face='Courier'>rates</font>, "
+        "<font face='Courier'>velocities</font>, "
+        "<font face='Courier'>forces</font>, "
+        "<font face='Courier'>moments</font>, "
+        "<font face='Courier'>aerosurfaces</font>, "
+        "<font face='Courier'>propulsion</font>, &hellip;) and/or individual "
+        "<font face='Courier'>&lt;property&gt;</font>s, optionally converting "
+        "units with an <font face='Courier'>apply</font> function "
+        "(<font face='Courier'>FGOutputType.cpp:100-128</font>). "
+        "<font face='Courier'>&lt;notify&gt;</font> prints chosen properties "
+        "when an event fires. Wrap script runs in the Python module "
+        "(<font face='Courier'>import jsbsim</font>) to sweep parameters, "
+        "auto-trim across the envelope, and assert on results — turning your "
+        "tuning into an automated regression suite."))
+
+    heading("Disturbance and turbulence testing", 1, story)
+    story.append(p(
+        "Robustness comes from flying the model in weather. JSBSim's "
+        "atmosphere provides steady wind layers, discrete gusts and "
+        "continuous turbulence (Dryden-type spectra with selectable "
+        "severity); set them from the IC file or a script and confirm the "
+        "augmented aircraft still holds its modes. Couple this with the "
+        "Monte-Carlo derivative sweeps from the data chapter to bound "
+        "handling across both atmospheric and model uncertainty."))
+
+
+# ----------------------------------------------------------------------------
+def add_fdm_performance_hq(story):
+    story.append(PageBreak())
+    heading("Performance and Handling-Qualities Matching", 0, story)
+    story.append(p(
+        "The final test of realism is quantitative: does the model reproduce "
+        "the aircraft's published performance and exhibit the right handling "
+        "qualities? This is the acceptance phase — the loop where you compare "
+        "to data and correct the responsible numbers."))
+
+    heading("Trim and performance points", 1, story)
+    story.append(p(
+        "Begin from trim (the trim algorithm chapter): confirm the aircraft "
+        "trims at sensible attitudes and control positions across weight and "
+        "altitude. Then script the performance anchors and compare to the POH:"))
+    data = [
+        ["Performance target", "How to measure in JSBSim"],
+        ["Stall speed (clean / flap)",
+         "trim at increasing " + _g("α") + " until C<sub>Lmax</sub>; read V"],
+        ["Best climb rate / V<sub>y</sub>",
+         "max-throttle trimmed climb sweep over airspeed"],
+        ["Cruise TAS &amp; fuel flow",
+         "trim at cruise power/altitude; read velocities/propulsion"],
+        ["Service ceiling",
+         "climb until rate-of-climb falls to 100 ft/min"],
+        ["Takeoff / landing distance",
+         "scripted ground roll with gear + brakes"],
+        ["Range / endurance",
+         "integrate fuel burn at cruise to empty"],
+    ]
+    story.append(_oftab(data, [6.0 * cm, 9.8 * cm]))
+
+    heading("Handling-qualities targets", 1, story)
+    story.append(p(
+        "Linearise about trim (or fit the doublet responses) and check the "
+        "modal characteristics against the criteria in MIL-STD-1797 / "
+        "the older MIL-F-8785C and the pilot-rated Cooper-Harper scale:"))
+    for b in [
+        "<b>Short period</b> — frequency and damping in the Level-1 box on "
+        "the CAP (Control Anticipation Parameter) chart; this is the mode "
+        "pilots feel most.",
+        "<b>Phugoid</b> — long-period, lightly damped but not divergent "
+        "(damping &gt; 0).",
+        "<b>Dutch roll</b> — adequate frequency and damping; the yaw damper "
+        "exists to meet this.",
+        "<b>Roll mode</b> — time constant small enough for crisp roll "
+        "response; <b>spiral</b> — at worst slowly divergent.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Energy methods and the iteration loop", 1, story)
+    story.append(p(
+        "Specific excess power P<sub>s</sub> = V(T&minus;D)/W ties thrust, "
+        "drag and weight to climb and acceleration; matching P<sub>s</sub> "
+        "across the envelope simultaneously validates the drag polar and the "
+        "thrust model. When something is off, the discrepancy points to the "
+        "culprit: wrong cruise speed &rarr; drag polar or thrust; wrong climb "
+        "&rarr; excess power; wrong stall speed &rarr; C<sub>Lmax</sub>; wrong "
+        "short-period &rarr; C<sub>m" + _g("α") + "</sub>/C<sub>mq</sub> or "
+        "inertia/CG. Correct that number, re-run the script, repeat. Bound "
+        "the residual uncertainty with Monte-Carlo sweeps of the derivatives "
+        "so you know the model is robust, not just tuned to one point."))
+    story.append(quote(
+        "Validate open-loop first: with controls fixed, a good model's free "
+        "response (modes, trim drift, glide) should already track flight "
+        "data before any autopilot is engaged."))
+
+
+# ----------------------------------------------------------------------------
+def add_fdm_integration(story):
+    story.append(PageBreak())
+    heading("Integration with FlightGear and External Simulators", 0, story)
+    story.append(p(
+        "JSBSim is a library; the realism a user perceives also depends on "
+        "how it is wired into a visual simulator or control stack. The "
+        "contract is always the property tree: the host writes commands and "
+        "environment, JSBSim integrates the physics, and the host reads back "
+        "states for the visuals and instruments."))
+
+    heading("FlightGear", 1, story)
+    story.append(p(
+        "FlightGear embeds JSBSim as a native FDM. The integration points:"))
+    for b in [
+        "<b>Inputs</b>: the host writes <font face='Courier'>fcs/"
+        "aileron-cmd-norm</font>, <font face='Courier'>elevator-cmd-norm"
+        "</font>, <font face='Courier'>rudder-cmd-norm</font>, "
+        "<font face='Courier'>throttle-cmd-norm</font>, gear/flap/brake "
+        "commands, etc.",
+        "<b>Outputs</b>: it reads positions for the 3-D model animations — "
+        "<font face='Courier'>fcs/&hellip;-pos-norm</font> for surfaces and "
+        "gear, engine RPM/N1, and the body state for the view.",
+        "<b>Environment</b>: FlightGear supplies winds, temperature and the "
+        "ground/terrain elevation that the gear contacts.",
+        "<b>Glue</b>: keep property names on the conventional paths so the "
+        "stock FlightGear bindings and instrument code find them; document "
+        "any custom <font face='Courier'>ap/</font> or "
+        "<font face='Courier'>systems/</font> properties you add.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Sockets, native protocols, and other engines", 1, story)
+    story.append(p(
+        "For external stacks, <font face='Courier'>&lt;output type=\"SOCKET\""
+        "&gt;</font> and <font face='Courier'>type=\"FLIGHTGEAR\"</font> "
+        "stream state over TCP/UDP, and the Python/C++ APIs embed the engine "
+        "directly. JSBSim is the physics core behind FlightGear, Unreal "
+        "Engine's Antoinette project, ArduPilot and PX4 software-in-the-loop, "
+        "and reinforcement-learning gyms such as gym-jsbsim; in every case "
+        "the host steps the model and exchanges the same property set. "
+        "Match the host's frame rate to a sensible JSBSim "
+        "<font face='Courier'>dt</font> (often 120 Hz) and interpolate the "
+        "visuals rather than slowing the physics."))
+
+    heading("Common integration pitfalls", 1, story)
+    for b in [
+        "Double control paths — both host and an internal autopilot driving "
+        "the same surface; decide who owns each command.",
+        "Frame-rate / <font face='Courier'>dt</font> mismatch causing jitter "
+        "or instability, especially with stiff gear.",
+        "Terrain/altitude reference disagreements (AGL vs MSL, geoid vs "
+        "ellipsoid) that make the gear float or sink.",
+        "Unit mismatches at the boundary — JSBSim's commands are normalised, "
+        "but state outputs are in feet, fps, radians unless converted.",
+    ]:
+        story.append(bullet(b))
+
+
+# ----------------------------------------------------------------------------
+def add_fdm_checklist(story):
+    story.append(PageBreak())
+    heading("A Master Realism Checklist and Common Pitfalls", 0, story)
+    story.append(p(
+        "This chapter consolidates Part IV into a checklist you can run "
+        "against any model. None of these items is exotic; every one is a "
+        "real failure seen on the forums and the devel list, and most are "
+        "trivially avoidable once you know to look."))
+
+    heading("Geometry, mass, and balance", 1, story)
+    for b in [
+        "Left/right symmetry of every location (gear, tanks, point masses, "
+        "thrusters) unless asymmetry is intended.",
+        "CG kept near the AERORP and inside the POH envelope at all loadings "
+        "and fuel states; check fuel-burn CG travel.",
+        "Inertia tensor physical: I<sub>zz</sub> &gt; I<sub>yy</sub> &gt; "
+        "I<sub>xx</sub>, I<sub>zz</sub> &asymp; I<sub>xx</sub>+I<sub>yy</sub>, "
+        "sensible <font face='Courier'>ixz</font> sign.",
+        "Reference S, b, c&#x0304; in <font face='Courier'>&lt;metrics&gt;"
+        "</font> match the values used to non-dimensionalise the aero data.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Aerodynamics", 1, story)
+    for b in [
+        "Tables span the full intended envelope in " + _g("α") + ", " +
+        _g("β") + " and Mach (ends are held flat, not extrapolated).",
+        "C<sub>m" + _g("α") + "</sub> &lt; 0 (statically stable) with a "
+        "sensible static margin; C<sub>n" + _g("β") + "</sub> &gt; 0, "
+        "C<sub>l" + _g("β") + "</sub> &lt; 0.",
+        "Damping derivatives present and correctly signed (C<sub>mq</sub>, "
+        "C<sub>lp</sub>, C<sub>nr</sub> &lt; 0); units match the "
+        "<font face='Courier'>bi2vel</font>/<font face='Courier'>ci2vel"
+        "</font> convention.",
+        "Yaw/roll depend on " + _g("α") + " if you want stall/spin; "
+        "high-" + _g("α") + " drag rise present.",
+        "Control signs verified: positive elevator-cmd does what you expect "
+        "to pitch.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Propulsion, gear, and control", 1, story)
+    for b in [
+        "Propulsion matched to static thrust/power, cruise fuel flow and "
+        "climb; propeller sense/torque trimmed against.",
+        "Gear spring rate &asymp; load/deflection, soft enough to avoid "
+        "energy gain; rebound damping &ge; compression; touchdown logged and "
+        "stable.",
+        "Brake groups and steering wired; taildraggers steer and do not "
+        "ground-loop uncontrollably.",
+        "Actuator rate limits realistic (no pilot-induced oscillation); "
+        "control gearing/mixing correct.",
+    ]:
+        story.append(bullet(b))
+
+    heading("Validation and integration", 1, story)
+    for b in [
+        "Trims across the envelope without divergence; open-loop free "
+        "response matches expectation before autopilot.",
+        "Performance and modal targets met against the POH and "
+        "MIL-STD-1797 / Cooper-Harper.",
+        "Behaves in turbulence and across Monte-Carlo derivative spreads.",
+        "Property names on conventional paths; single owner per control "
+        "command; consistent <font face='Courier'>dt</font> with the host.",
+        "Provenance of every coefficient recorded, so a future discrepancy "
+        "is traceable to its source.",
+    ]:
+        story.append(bullet(b))
+    story.append(quote(
+        "Realism is not one big secret; it is a hundred small correctnesses. "
+        "The property tree makes every one of them observable — instrument, "
+        "compare, correct, repeat."))
 
 
 # ============================================================================
