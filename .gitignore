@@ -1,5 +1,7 @@
 Makefile
 Makefile.in
+# Temporary scaffolding for the Ukrainian-edition translation pipeline
+docs_output/uk_slices/
 .deps
 *.o
 *.a
